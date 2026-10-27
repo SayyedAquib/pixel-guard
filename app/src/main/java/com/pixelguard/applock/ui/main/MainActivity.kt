@@ -1,5 +1,6 @@
 package com.pixelguard.applock.ui.main
 
+import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.compose.setContent
@@ -44,6 +45,12 @@ class MainActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         enableHighRefreshRate()
+
+        // H-5: Tapjacking & Overlay suppression
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            window.setHideOverlayWindows(true)
+        }
+        window.decorView.filterTouchesWhenObscured = true
 
         setContent {
             PixelAppLockTheme {
@@ -137,14 +144,25 @@ fun AppLockRoot(
     var isAuthenticated by remember { mutableStateOf(false) }
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
 
-    DisposableEffect(lifecycleOwner, isPinConfigured) {
+    val prefs by viewModel.preferences.collectAsState()
+    val context = LocalContext.current
+    val isNight = com.pixelguard.applock.domain.usecase.SessionManager.isNightLockdownActive(
+        prefs.isScheduleEnabled,
+        prefs.scheduleStartHour,
+        prefs.scheduleEndHour
+    )
+    val isNightPinOnly = isNight && prefs.isNightLockdownPinOnly
+    val isLockedOut = com.pixelguard.applock.domain.usecase.SessionManager.isLockedOut(context.packageName)
+    val allowBio = prefs.isBiometricsEnabled && !isNightPinOnly && !isLockedOut
+
+    DisposableEffect(lifecycleOwner, isPinConfigured, allowBio) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) {
                 if (isPinConfigured == true) {
                     isAuthenticated = false
                 }
             } else if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
-                if (isPinConfigured == true && !isAuthenticated) {
+                if (isPinConfigured == true && !isAuthenticated && allowBio) {
                     onPromptBiometric(
                         { isAuthenticated = true },
                         { /* user cancelled, stays on PIN screen */ }
@@ -172,8 +190,6 @@ fun AppLockRoot(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        val prefs by viewModel.preferences.collectAsState()
-        val context = LocalContext.current
         val hapticManager = remember(context) { com.pixelguard.applock.ui.common.HapticManager(context) }
 
         LaunchedEffect(prefs.isRecentsMaskingEnabled) {
@@ -196,20 +212,22 @@ fun AppLockRoot(
                 targetAppName = "Pixel Guard",
                 targetIcon = null,
                 isDecoyEnabled = false,
-                isBiometricEnabled = true,
+                isBiometricEnabled = allowBio,
                 isHapticsEnabled = prefs.isHapticsEnabled,
                 isAnimationsEnabled = prefs.isAnimationsEnabled,
                 lockoutSecondsProvider = { com.pixelguard.applock.domain.usecase.SessionManager.getRemainingLockoutSeconds(context.packageName) },
                 attemptsUntilLockoutProvider = { com.pixelguard.applock.domain.usecase.SessionManager.getAttemptsUntilLockout(context.packageName) },
                 onUnlockSuccess = {
-                    onPromptBiometric(
-                        {
-                            hapticManager.unlockSuccess(prefs.isHapticsEnabled)
-                            com.pixelguard.applock.domain.usecase.SessionManager.resetFailedAttempts(context.packageName)
-                            isAuthenticated = true
-                        },
-                        { /* user cancelled, stays on PIN screen */ }
-                    )
+                    if (allowBio) {
+                        onPromptBiometric(
+                            {
+                                hapticManager.unlockSuccess(prefs.isHapticsEnabled)
+                                com.pixelguard.applock.domain.usecase.SessionManager.resetFailedAttempts(context.packageName)
+                                isAuthenticated = true
+                            },
+                            { /* user cancelled, stays on PIN screen */ }
+                        )
+                    }
                 },
                 onPinSubmitted = { pin ->
                     scope.launch {

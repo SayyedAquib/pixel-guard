@@ -172,9 +172,9 @@ class DualThemeContrastTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Attention Needed").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Arm Recommended Shields").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Titan M2").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Settings").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Sign-In & Passcode").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Change Passcode").assertIsDisplayed()
     }
 
     @Test
@@ -188,9 +188,9 @@ class DualThemeContrastTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Attention Needed").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Arm Recommended Shields").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Titan M2").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Settings").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Sign-In & Passcode").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Change Passcode").assertIsDisplayed()
     }
 
     @Test
@@ -203,8 +203,8 @@ class DualThemeContrastTest {
                 )
             }
         }
-        composeTestRule.onNodeWithText("Setup Permissions").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Accessibility Service").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Welcome to Pixel Guard").assertIsDisplayed()
+        composeTestRule.onNodeWithText("App Detection").assertIsDisplayed()
     }
 
     @Test
@@ -217,8 +217,8 @@ class DualThemeContrastTest {
                 )
             }
         }
-        composeTestRule.onNodeWithText("Setup Permissions").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Accessibility Service").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Welcome to Pixel Guard").assertIsDisplayed()
+        composeTestRule.onNodeWithText("App Detection").assertIsDisplayed()
     }
 }
 

@@ -18,6 +18,13 @@ import kotlinx.coroutines.flow.map
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "pixel_app_lock_prefs")
 
+data class PinCredentials(
+    val pinHash: String?,
+    val pinSalt: String?,
+    val recoveryHash: String?,
+    val recoverySalt: String?
+)
+
 class PreferencesDataStore(private val context: Context) {
 
     val lockedPackagesFlow: Flow<Set<String>> = context.dataStore.data.map { preferences ->
@@ -30,6 +37,46 @@ class PreferencesDataStore(private val context: Context) {
 
     val pinSaltFlow: Flow<String?> = context.dataStore.data.map { preferences ->
         preferences[KEY_PIN_SALT]
+    }
+
+    val recoveryCodeHashFlow: Flow<String?> = context.dataStore.data.map { preferences ->
+        preferences[KEY_RECOVERY_CODE_HASH]
+    }
+
+    val recoveryCodeSaltFlow: Flow<String?> = context.dataStore.data.map { preferences ->
+        preferences[KEY_RECOVERY_CODE_SALT]
+    }
+
+    val pinCredentialsFlow: Flow<PinCredentials> = context.dataStore.data.map { preferences ->
+        PinCredentials(
+            pinHash = preferences[KEY_PIN_HASH],
+            pinSalt = preferences[KEY_PIN_SALT],
+            recoveryHash = preferences[KEY_RECOVERY_CODE_HASH],
+            recoverySalt = preferences[KEY_RECOVERY_CODE_SALT]
+        )
+    }
+
+    suspend fun savePinWithRecovery(
+        pinHash: String,
+        pinSalt: String,
+        recoveryHash: String,
+        recoverySalt: String
+    ) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_PIN_HASH] = pinHash
+            preferences[KEY_PIN_SALT] = pinSalt
+            preferences[KEY_RECOVERY_CODE_HASH] = recoveryHash
+            preferences[KEY_RECOVERY_CODE_SALT] = recoverySalt
+        }
+    }
+
+    suspend fun clearPinAndCredentials() {
+        context.dataStore.edit { preferences ->
+            preferences.remove(KEY_PIN_HASH)
+            preferences.remove(KEY_PIN_SALT)
+            preferences.remove(KEY_RECOVERY_CODE_HASH)
+            preferences.remove(KEY_RECOVERY_CODE_SALT)
+        }
     }
 
     val globalFailedAttemptsFlow: Flow<Int> = context.dataStore.data.map { preferences ->
@@ -75,7 +122,7 @@ class PreferencesDataStore(private val context: Context) {
             isBiometricsEnabled = preferences[KEY_BIOMETRICS_ENABLED] ?: true,
             lockType = LockType.valueOf(preferences[KEY_LOCK_TYPE] ?: LockType.PIN.name),
             gracePeriodSeconds = preferences[KEY_GRACE_PERIOD_SECONDS] ?: 0,
-            isIntruderSelfieEnabled = preferences[KEY_INTRUDER_SELFIE_ENABLED] ?: true,
+            isIntruderSelfieEnabled = preferences[KEY_INTRUDER_SELFIE_ENABLED] ?: false,
             failedAttemptsThreshold = preferences[KEY_FAILED_ATTEMPTS_THRESHOLD] ?: 3,
             isDecoyCrashEnabled = preferences[KEY_DECOY_CRASH_ENABLED] ?: false,
             isNotificationShieldEnabled = preferences[KEY_NOTIFICATION_SHIELD_ENABLED] ?: true,
@@ -177,6 +224,8 @@ class PreferencesDataStore(private val context: Context) {
         private val KEY_LOCKED_PACKAGES = stringSetPreferencesKey("locked_packages")
         private val KEY_PIN_HASH = stringPreferencesKey("pin_hash")
         private val KEY_PIN_SALT = stringPreferencesKey("pin_salt")
+        private val KEY_RECOVERY_CODE_HASH = stringPreferencesKey("recovery_code_hash")
+        private val KEY_RECOVERY_CODE_SALT = stringPreferencesKey("recovery_code_salt")
         private val KEY_BIOMETRICS_ENABLED = booleanPreferencesKey("biometrics_enabled")
         private val KEY_LOCK_TYPE = stringPreferencesKey("lock_type")
         private val KEY_GRACE_PERIOD_SECONDS = intPreferencesKey("grace_period_seconds")

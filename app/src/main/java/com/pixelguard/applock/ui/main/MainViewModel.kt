@@ -1,9 +1,12 @@
 package com.pixelguard.applock.ui.main
 
 import android.app.AppOpsManager
+import android.content.ComponentName
 import android.content.Context
 import android.os.Process
 import android.provider.Settings
+import android.text.TextUtils
+import java.util.Locale
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pixelguard.applock.AppLockApplication
@@ -117,14 +120,14 @@ class MainViewModel(
             }
             .let { list ->
                 when (prefs.appSortOrder) {
-                    AppSortOrder.NAME_ASC -> list.sortedBy { it.appName.lowercase() }
+                    AppSortOrder.NAME_ASC -> list.sortedBy { it.appName.lowercase(Locale.ROOT) }
                     AppSortOrder.LOCKED_FIRST -> list.sortedWith(
                         compareByDescending<AppItem> { it.isLocked }
-                            .thenBy { it.appName.lowercase() }
+                            .thenBy { it.appName.lowercase(Locale.ROOT) }
                     )
                     AppSortOrder.CATEGORY -> list.sortedWith(
                         compareBy<AppItem> { it.category.ordinal }
-                            .thenBy { it.appName.lowercase() }
+                            .thenBy { it.appName.lowercase(Locale.ROOT) }
                     )
                 }
             }
@@ -219,10 +222,10 @@ class MainViewModel(
         }
     }
 
-    fun setMasterPin(pin: String, onComplete: () -> Unit = {}) {
+    fun setMasterPin(pin: String, onComplete: (String) -> Unit = { _ -> }) {
         viewModelScope.launch {
-            repository.setPin(pin)
-            onComplete()
+            val recoveryCode = repository.setPin(pin)
+            onComplete(recoveryCode)
         }
     }
 
@@ -426,15 +429,37 @@ class MainViewModel(
 
     private fun isAccessibilityServiceEnabled(context: Context): Boolean {
         val expectedService = "${context.packageName}/${com.pixelguard.applock.service.AppLockAccessibilityService::class.java.canonicalName}"
+        val expectedShortService = "${context.packageName}/${com.pixelguard.applock.service.AppLockAccessibilityService::class.java.name}"
         val enabledServices = Settings.Secure.getString(
             context.contentResolver,
             Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
         ) ?: return false
-        return enabledServices.contains(expectedService)
+
+        val colonSplitter = TextUtils.SimpleStringSplitter(':')
+        colonSplitter.setString(enabledServices)
+        while (colonSplitter.hasNext()) {
+            val componentNameString = colonSplitter.next()
+            if (componentNameString.equals(expectedService, ignoreCase = true) ||
+                componentNameString.equals(expectedShortService, ignoreCase = true) ||
+                ComponentName.unflattenFromString(componentNameString)?.packageName == context.packageName
+            ) {
+                return true
+            }
+        }
+        return false
     }
 
     private fun isNotificationServiceEnabled(context: Context): Boolean {
         val flat = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners") ?: return false
-        return flat.contains(context.packageName)
+        val colonSplitter = TextUtils.SimpleStringSplitter(':')
+        colonSplitter.setString(flat)
+        while (colonSplitter.hasNext()) {
+            val componentNameString = colonSplitter.next()
+            val component = ComponentName.unflattenFromString(componentNameString)
+            if (component?.packageName == context.packageName) {
+                return true
+            }
+        }
+        return false
     }
 }

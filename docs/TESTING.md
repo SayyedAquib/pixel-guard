@@ -16,9 +16,9 @@ Pixel Guard enforces a pragmatic, high-assurance testing strategy. Because it is
   - `io.mockk:mockk:1.13.13`: Kotlin-first mocking for Android platform components and context services.
 - **Device Hardware Testing**: Android Debug Bridge (ADB) via PowerShell on Google Pixel 9 (Android 17, 120Hz display).
 
-## Test Suite Structure (143 Total Tests, 100% Passing)
+## Test Suite Structure (164 Total Tests, 100% Passing)
 
-### 1. Presentation & Compose UI Tests (54 tests)
+### 1. Presentation & Compose UI Tests (58 tests)
 All UI tests run via Compose UI Rule + Robolectric on the JVM with exact Pixel 9 display metrics:
 - **`MainScreenUiTest`** (19 tests):
   - TopAppBar header, Titan M2 armor branding, and Intruder selfie count badge.
@@ -41,33 +41,33 @@ All UI tests run via Compose UI Rule + Robolectric on the JVM with exact Pixel 9
   - AppSecurityProfileSheetContent displays Category & Tags section, interactive category selector capsule, and custom tags.
 - **`LockOverlayScreenUiTest`** (10 tests):
   - Target application name, icon, and "Secured by Pixel Guard" shield badge.
-  - 4-digit PIN keypad input and automatic submission on 4th digit.
+  - 6-digit PIN keypad input and automatic submission on 6th digit (`MASTER_PIN_LENGTH = 6`).
   - Backspace button semantics and digit removal prior to submission.
   - Pre-lockout warning banner ("2 attempts remaining before 30s lockout").
   - Lockout countdown banner and disabled keypad state.
   - "Exit to Home" callback invocation.
   - Decoy crash dialog mode ("Pixel Bank keeps stopping"), "Send feedback", and "Close app" dismissal.
   - Biometric fingerprint icon button click triggering `onUnlockSuccess`.
-  - Scrambled PIN keypad mode rendering all 10 digits (0-9).
+  - Scrambled PIN keypad mode rendering all 10 digits (0-9) and re-scrambling per attempt.
 - **`OnboardingScreenUiTest`** (11 tests):
   - Initial permission cards with "Required" and "Optional" badges.
-  - Step 2 Master PIN card appearance once required permissions are granted.
-  - Submit button disabled state until both PIN fields have 4 digits.
-  - PIN mismatch validation ("PINs do not match").
-  - Successful Master PIN setup, DataStore persistence, and completion navigation.
-  - Continue button behavior when Master PIN is already set.
+  - Step 2 Master Passcode card appearance once required permissions are granted.
+  - Submit button disabled state until both passcode fields have 6 digits.
+  - Passcode mismatch validation ("Passcodes do not match").
+  - Weak PIN rejection ("Passcode is too simple. Avoid repetitive or sequential digits.").
+  - Successful Master Passcode setup, DataStore persistence, and 16-character recovery key modal presentation.
+  - Recovery key modal dialog displaying formatted `XXXX-XXXX-XXXX-XXXX`, copy button, and completion on confirmation.
   - Optional Notification Privacy Shield "Later" skip button behavior.
-  - Dynamic remaining permission text ("Grant 1 Remaining Permission") when 1 required permission is active.
+  - Notification permission launcher trigger for Android 13+ `POST_NOTIFICATIONS`.
   - Bottom action button enabled state and permission settings trigger capability.
   - Soft keyboard insets handling with `imePadding` and Step 2 auto-scroll visibility.
-  - Android 17 notice card contextual visibility and contrast styling.
 - **`SettingsScreenUiTest`** (10 tests):
   - Screen title, Hardware-backed Titan M2 badge, and Biometrics toggle.
   - Dynamic Security Status Hero banner ("Hardware Armor Active").
   - Security Vulnerability Attention banner when settings protection or recents masking is disabled.
   - TopAppBar Back navigation callback.
-  - Change Master PIN row click opens bottom sheet.
-  - ChangePinSheetContent mismatch validation and save new 4-digit PIN.
+  - Change Master Passcode row click opens bottom sheet.
+  - ChangePinSheetContent mismatch validation and save new 6-digit passcode.
   - GlobalGracePeriodSheetContent selection of global grace period (e.g. 1 minute).
   - ScheduleSheetContent configuration of Night Lockdown hours (e.g. 10:00 PM – 6:00 AM).
   - QuickTilePauseSheetContent selection of quick settings pause duration (e.g. 30 minutes).
@@ -78,26 +78,37 @@ All UI tests run via Compose UI Rule + Robolectric on the JVM with exact Pixel 9
   - Single record deletion from logs list.
   - Batch "Clear All" confirmation dialog and cancellation.
   - Batch "Clear All" confirmation dialog and record clearance.
-  - Photo preview modal dialog opening and closing.
+  - Photo preview modal dialog opening and closing with pinch-to-zoom evidence viewer.
   - Back navigation callback.
+- **`DualThemeContrastTest`** (2 tests):
+  - Verification of WCAG 2.1 AA/AAA contrast ratios across light and dark theme surfaces.
 
-### 2. Unit & Service Tests (89 tests)
-Unit and service tests reside in `app/src/test/java/` and validate non-UI modules, cryptography, background event filtering, and business logic:
-- **`AppLockAccessibilityServiceTest`** (12 tests):
-  - `TYPE_WINDOWS_CHANGED` gesture navigation handle immunity from Pixel Launcher (`com.google.android.apps.nexuslauncher`).
-  - Target package `TYPE_WINDOWS_CHANGED` ignored.
-  - Locked package `TYPE_WINDOW_STATE_CHANGED` launches `LockActivity`.
-  - Already unlocked package `TYPE_WINDOW_STATE_CHANGED` marks app resumed without re-prompting.
-  - Transient Gboard keyboard (`com.google.android.inputmethod.latin`) preserves active session.
-  - Transient system share sheet (`com.android.intentresolver`) preserves active session.
-  - Transient system photo picker (`com.google.android.providers.media.module`) preserves active session.
-  - Transient Pixel Guard self-package (`com.pixelguard.applock`) preserves active session.
-  - Home launcher transition with 0s grace keeps app unlocked within 15s quick-switch buffer, then locks after buffer expires.
-  - Home launcher transition with 30s grace records exit time and keeps app unlocked within grace window.
-  - Dynamic Settings protection (`isSettingsProtected == true`) launches `LockActivity`.
-  - Dynamic Google Play Store protection (`isPlayStoreProtected == true`) launches `LockActivity`.
-  - Dynamic `ACTION_SCREEN_OFF` broadcast receiver revokes foreground session immediately.
-- **`CryptoManagerTest`** (8 tests): PBKDF2/SHA-256 hashing, distinct salts, constant-time comparison, Keystore crypto operations.
+### 2. Unit, Domain, Repository & Service Tests (106 tests)
+Unit and service tests validate cryptography, rate limiting, background interception resilience, and data persistence:
+- **`CryptoManagerTest`** (15 tests):
+  - PBKDF2/SHA-256 (200k iterations) hashing and constant-time verification.
+  - Strict `Locale.ROOT` byte-array-to-hex and hex-to-byte-array transformations (H-2).
+  - Weak-PIN detection rejecting repeating digits ("000000", "111111"), sequential digits ("123456", "654321"), repeating 2/3-digit sequences, and common blocklist PINs (H-1).
+  - 16-character unambiguous base32 recovery key generation and normalization (H-3).
+  - Authenticated storage envelope encryption and decryption with Associated Authenticated Data (AAD: `pin_hash`, `pin_salt`, `recovery_hash`, `recovery_salt`) (M-10).
+  - Rejection of unauthenticated or tampered ciphertext envelopes.
+- **`AppLockRepositoryTest`** (9 tests):
+  - 6-digit PIN persistence returning formatted 16-character recovery key.
+  - Single-snapshot atomic reads for PIN verification preventing TOCTOU race conditions (M-2).
+  - Fail-closed handling and `VerifyPinResult.Unrecoverable` return on corrupted ciphertext.
+  - Rate-limited verification returning attempts remaining and progressive lockout countdowns (H-1).
+  - Recovery key validation and offline credential reset (`resetWithRecoveryCode`).
+- **`SessionManagerTest`** (28 tests):
+  - Progressive rate-limiting lockout penalties (30s, 60s, 300s, 900s).
+  - Clock tampering defense (`syncPersistedLockout`): clamps forward clock jumps to 300s max penalty and preserves remaining duration on backward roll (M-11).
+  - Grace period math (immediate 15s quick-switch buffer, screen-off relock, per-app overrides).
+  - Night lockdown schedule enforcement and pin-only mode override.
+- **`AppLockAccessibilityServiceTest`** (15 tests):
+  - Synchronous disk snapshot loading via `SecuritySnapshotManager` (C-2).
+  - `SupervisorJob()` and `.catch {}` coroutine resilience preventing permanent collector cancellation (C-2).
+  - Fail-closed interception: blocks non-system packages when caches are unready.
+  - Whitelist immunity for launcher (`com.google.android.apps.nexuslauncher`), recents, and transient system UI.
+  - Screen-off broadcast receiver session revocation.
 - **`SessionManagerTest`** (27 tests): Grace period math, Night Lockdown scheduling boundaries, per-app priority, flicker buffer protection, active foreground session retention during continuous in-app usage, exit-based grace countdown, absolute screen-off all-session revocation, 15s quick-switch buffer, and "Until Screen Off" persistence.
 - **`LockPreferencesTest`** (13 tests): Default value invariants (`isSettingsProtected == false`, `isRecentsMaskingEnabled == false`, `isBiometricsEnabled == true`, etc.), `AppSortOrder` and `LockType` enum completeness, mutation copy isolation, JSON-based PIN-only and notification mask evaluations, category overrides parsing, custom user & app tag serialization, and `isCustomized()` policy checks.
 - **`MainViewModelTest`** (21 tests): Reactive state flow combining, dual search query matching (`appName` and `packageName`), category filtering and dynamic category override, custom tag lifecycle & batch actions, customized filter, sorting, batch actions, PIN configuration, grace period serialization.

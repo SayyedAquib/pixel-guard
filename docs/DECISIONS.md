@@ -1353,5 +1353,111 @@ Running `.\gradlew.bat testDebugUnitTest` took considerable time (often 1–3 mi
 - Dramatically accelerated developer feedback loop during daily coding and logic verification.
 - Preserves full 143-test assurance via `.\gradlew.bat testDebugUnitTest` before production release builds.
 
+---
+
+## ADR 042: Dedicated Production Keystore & Release Signing Configuration (C-1)
+### Date
+2026-10-27
+### Status
+Accepted
+### Context
+The production release APK configuration in `app/build.gradle.kts` previously fell back to the public Android debug keystore (`~/.android/debug.keystore`). This constituted a Critical security finding (C-1) because any attacker could re-sign and forge valid updates to Pixel Guard, and Google Play would reject the binary.
+### Decision
+1. Generated a dedicated production keystore (`keystore/pixelguard-release.jks`) using JDK 17 `keytool` with RSA 4096-bit key length and `SHA384withRSA` signing algorithm.
+2. Implemented `keystore.properties` externalized configuration, accompanied by `keystore.properties.example`.
+3. Updated `.gitignore` to explicitly prevent committing keystore binaries and secret properties.
+4. Bound `signingConfigs.getByName("release")` strictly in `app/build.gradle.kts` with automatic fallback to environment variables in automated CI/CD environments.
+### Consequences
+- Guarantees package integrity, authentic developer provenance, and update authenticity.
+- Meets OWASP MASVS M7 / M2 security requirements for release builds.
+
+---
+
+## ADR 043: Fail-Closed Interception Architecture with Disk Snapshots & Resilient Collectors (C-2)
+### Date
+2026-10-27
+### Status
+Accepted
+### Context
+`AppLockAccessibilityService` previously initialized empty caches (`cachedLockedPackages = emptySet()`) and launched DataStore coroutines on `Dispatchers.Main` without `SupervisorJob()`. During cold start or after a transient DataStore `IOException`, the service failed open, allowing locked applications to launch without authentication.
+### Decision
+1. Created `SecuritySnapshotManager` to maintain an atomic, synchronized disk snapshot (`security_snapshot.json`) of locked packages and protection preferences.
+2. `AppLockAccessibilityService.onCreate()` synchronously loads this snapshot before processing window events.
+3. Flow collectors are enclosed in `SupervisorJob()` and protected with `.catch {}` to guarantee that coroutines never die silently.
+4. `onAccessibilityEvent()` enforces a fail-closed policy (`isCachesReady`): if caches are not ready, non-system applications are intercepted immediately.
+### Consequences
+- Eliminates the cold-start race condition and permanent cache death vulnerability.
+- System launcher and transient system UI packages are whitelisted to prevent device boot deadlocks.
+
+---
+
+## ADR 044: Authentication Policy Alignment & Biometric Gating Hardening (C-3, H-5)
+### Date
+2026-10-27
+### Status
+Accepted
+### Context
+The in-app authentication gate in `MainActivity` previously triggered `BiometricPrompt` unconditionally, ignoring user preferences (e.g., biometric disabled, night PIN-only lockdown) and bypassing progressive lockout timers. Furthermore, windows lacked overlay suppression, exposing the app to tapjacking.
+### Decision
+1. Hardened `MainActivity` and `LockActivity` auth gates: biometrics are prompted ONLY when `isBiometricsEnabled == true`, night PIN-only mode is inactive, and the package is not locked out (`!SessionManager.isLockedOut`).
+2. Disabled click handlers on invisible biometric button surfaces (`enabled = isBiometricEnabled && !isKeypadDisabled`).
+3. Added `window.setHideOverlayWindows(true)` on Android 12+ (API 31+) and enabled `window.decorView.filterTouchesWhenObscured = true` across all activities to mitigate tapjacking and overlay hijacking (H-5).
+### Consequences
+- Prevents coercion attacks during night lockdown or when biometrics are intentionally turned off.
+- Fully prevents tapjacking overlays from intercepting user touch events.
+
+---
+
+## ADR 045: Non-Destructive Notification Shielding & Contextual Permission Flow (C-4, M-6)
+### Date
+2026-10-27
+### Status
+Accepted
+### Context
+`NotificationShieldService` cancelled original notifications from locked apps, but because `POST_NOTIFICATIONS` runtime permission was never requested on Android 13+, masked replacement notifications silently dropped, permanently destroying user notifications. In addition, `PendingIntent` request codes used hash codes that could collide.
+### Decision
+1. Implemented pre-checks before notification cancellation: asserts `NotificationManagerCompat.areNotificationsEnabled()` and checks that the masked notification channel is unblocked. If replacement notifications cannot be posted, Pixel Guard leaves the original notification intact (fail-closed toward delivery).
+2. Added `POST_NOTIFICATIONS` runtime permission launcher in `OnboardingScreen` (Android 13+).
+3. Generated distinct URI data (`pixelguard://notification/...`) for each masked notification `PendingIntent` to guarantee intent uniqueness.
+### Consequences
+- Zero notifications are destroyed or lost.
+- Satisfies OWASP MASVS M6 / M8 delivery and privacy standards.
+
+---
+
+## ADR 046: 6-Digit Master PIN with Entropy Defense & 16-Character Offline Recovery Key (H-1, H-3)
+### Date
+2026-10-27
+### Status
+Accepted
+### Context
+A 4-digit PIN provides only 10,000 combinations, making it vulnerable to offline dictionary/brute-force attacks against PBKDF2 hashes if storage is accessed. Additionally, Keystore invalidation resulted in irreversible user lockout.
+### Decision
+1. Standardized Master Passcode length to **6 digits** (`MASTER_PIN_LENGTH = 6`) across `LockOverlayScreen`, `OnboardingScreen`, and `SettingsScreen`.
+2. Implemented `CryptoManager.isWeakPin()` enforcing 6 digits and rejecting repeating digits, ascending/descending sequences, and common weak PIN blocklists.
+3. Introduced a 16-character alphanumeric offline recovery key (`XXXX-XXXX-XXXX-XXXX`) generated via `SecureRandom` during onboarding.
+4. Stored the recovery key as a PBKDF2 hash inside encrypted preferences, enabling verified credential resets via `resetWithRecoveryCode()` even if Keystore or biometrics fail.
+### Consequences
+- Significantly increased entropy space (1,000,000 combinations, minus blocked weak sequences).
+- Provides a secure, offline recovery mechanism preventing permanent lockout.
+
+---
+
+## ADR 047: Authenticated Storage Envelopes (enc:v1:) with AAD & Least-Privilege Manifest (M-9, M-10)
+### Date
+2026-10-27
+### Status
+Accepted
+### Context
+Preferences were stored without envelope authentication, and fallback allowed unauthenticated plaintext reads. Furthermore, `AndroidManifest.xml` contained excessive/invalid permissions (`QUERY_ALL_PACKAGES`, `PACKAGE_USAGE_STATS`, `HIDE_OVERLAY_WINDOWS`).
+### Decision
+1. Created authenticated storage envelope format `enc:v1:<base64>` in `CryptoManager` with Associated Authenticated Data (`aad`) binding (e.g. `"pin_hash"`, `"pin_salt"`, `"recovery_hash"`, `"recovery_salt"`).
+2. Removed silent fallback to unauthenticated plaintext; invalid envelopes return typed `VerifyPinResult.Unrecoverable`.
+3. Pruned unneeded permissions from `AndroidManifest.xml`: removed `QUERY_ALL_PACKAGES` (relies on intent queries), `PACKAGE_USAGE_STATS` (uses Accessibility), and invalid manifest permission `HIDE_OVERLAY_WINDOWS`.
+### Consequences
+- Prevents ciphertext tampering and transposition attacks.
+- Adheres to Android least-privilege standards and ensures Google Play Policy compliance.
+
+
 
 

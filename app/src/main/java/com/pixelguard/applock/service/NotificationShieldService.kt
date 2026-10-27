@@ -17,6 +17,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import android.os.Build
+import androidx.core.app.NotificationManagerCompat
+import com.pixelguard.applock.BuildConfig
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -25,6 +29,7 @@ class NotificationShieldService : NotificationListenerService() {
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     @Volatile private var cachedPreferences: LockPreferences? = null
     @Volatile private var cachedLockedPackages: Set<String> = emptySet()
+    @Volatile private var isObservingDataStore = false
 
     override fun onCreate() {
         super.onCreate()
@@ -42,23 +47,26 @@ class NotificationShieldService : NotificationListenerService() {
     }
 
     private fun startObservingDataStore() {
+        if (isObservingDataStore) return
+        isObservingDataStore = true
+
         scope.launch(Dispatchers.IO) {
-            try {
-                AppLockApplication.instance.repository.preferences.collect { prefs ->
+            AppLockApplication.instance.repository.preferences
+                .catch { e ->
+                    if (BuildConfig.DEBUG) Log.e(TAG, "Error collecting preferences", e)
+                }
+                .collect { prefs ->
                     cachedPreferences = prefs
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error collecting preferences: ${e.message}")
-            }
         }
         scope.launch(Dispatchers.IO) {
-            try {
-                AppLockApplication.instance.repository.lockedPackages.collect { pkgs ->
+            AppLockApplication.instance.repository.lockedPackages
+                .catch { e ->
+                    if (BuildConfig.DEBUG) Log.e(TAG, "Error collecting lockedPackages", e)
+                }
+                .collect { pkgs ->
                     cachedLockedPackages = pkgs
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error collecting lockedPackages: ${e.message}")
-            }
         }
     }
 
@@ -97,7 +105,7 @@ class NotificationShieldService : NotificationListenerService() {
                         handleNotificationInterception(sbn, packageName, currentPrefs)
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error handling notification in fallback: ${e.message}")
+                    if (BuildConfig.DEBUG) Log.e(TAG, "Error handling notification in fallback: ${e.message}")
                 }
             }
         }
@@ -122,18 +130,39 @@ class NotificationShieldService : NotificationListenerService() {
         )
         val isUnlocked = SessionManager.isTemporarilyUnlocked(packageName, effectiveGrace)
         if (!isUnlocked) {
-            // 1. Immediately cancel raw notification to prevent preview flash in status bar
+            // C-4 Safety Assertion: Never cancel an original notification if the app lacks permission
+            // to post a replacement masked notification or the channel is blocked (Fail-closed toward delivery)
+            val notificationManagerCompat = NotificationManagerCompat.from(this)
+            if (!notificationManagerCompat.areNotificationsEnabled()) {
+                if (BuildConfig.DEBUG) {
+                    Log.w(TAG, "Notification permission not granted; leaving notification intact (C-4)")
+                }
+                return
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+                val channel = notificationManager?.getNotificationChannel(AppLockApplication.CHANNEL_ID_MASKED)
+                if (channel != null && channel.importance == NotificationManager.IMPORTANCE_NONE) {
+                    if (BuildConfig.DEBUG) {
+                        Log.w(TAG, "Masked notification channel blocked; leaving notification intact (C-4)")
+                    }
+                    return
+                }
+            }
+
+            // 1. Cancel raw notification to prevent preview flash in status bar
             cancelNotification(sbn.key)
-            if (com.pixelguard.applock.BuildConfig.DEBUG) {
+            if (BuildConfig.DEBUG) {
                 Log.d(TAG, "Shielded notification preview for locked package: $packageName")
             }
 
             // 2. Post safe masked placeholder so user knows they have a message
-            postMaskedNotification(packageName, sbn.id)
+            postMaskedNotification(packageName, sbn.id, sbn.key)
         }
     }
 
-    private fun postMaskedNotification(packageName: String, notificationId: Int) {
+    private fun postMaskedNotification(packageName: String, notificationId: Int, notificationKey: String) {
         val packageManager = packageManager
         val appName = try {
             val appInfo = packageManager.getApplicationInfo(packageName, 0)
@@ -143,9 +172,11 @@ class NotificationShieldService : NotificationListenerService() {
         }
 
         val launchIntent = packageManager.getLaunchIntentForPackage(packageName) ?: Intent()
+        // M-6 Fix: Unique Intent Data URI prevents PendingIntent requestCode collisions
+        launchIntent.data = android.net.Uri.parse("pixelguard://notification/${packageName}/${notificationId}")
         val pendingIntent = PendingIntent.getActivity(
             this,
-            packageName.hashCode(),
+            notificationId,
             launchIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )

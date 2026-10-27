@@ -43,7 +43,7 @@ class LockOverlayScreenUiTest {
     }
 
     @Test
-    fun clickingKeypadDigits_submitsOnFourthDigit() {
+    fun clickingKeypadDigits_submitsOnSixthDigit() {
         var submittedPin: String? = null
 
         composeTestRule.setContent {
@@ -64,10 +64,12 @@ class LockOverlayScreenUiTest {
         composeTestRule.onNodeWithText("1").performClick()
         composeTestRule.onNodeWithText("2").performClick()
         composeTestRule.onNodeWithText("3").performClick()
+        composeTestRule.onNodeWithText("4").performClick()
+        composeTestRule.onNodeWithText("5").performClick()
         assertThat(submittedPin).isNull()
 
-        composeTestRule.onNodeWithText("4").performClick()
-        assertThat(submittedPin).isEqualTo("1234")
+        composeTestRule.onNodeWithText("6").performClick()
+        assertThat(submittedPin).isEqualTo("123456")
     }
 
     @Test
@@ -96,12 +98,14 @@ class LockOverlayScreenUiTest {
         // Delete "2"
         composeTestRule.onNodeWithContentDescription("Delete").performClick()
 
-        // Type "9", "8", "7" -> Should result in "1987"
+        // Type "9", "8", "7", "6", "5" -> Should result in "198765"
         composeTestRule.onNodeWithText("9").performClick()
         composeTestRule.onNodeWithText("8").performClick()
         composeTestRule.onNodeWithText("7").performClick()
+        composeTestRule.onNodeWithText("6").performClick()
+        composeTestRule.onNodeWithText("5").performClick()
 
-        assertThat(submittedPin).isEqualTo("1987")
+        assertThat(submittedPin).isEqualTo("198765")
     }
 
     @Test

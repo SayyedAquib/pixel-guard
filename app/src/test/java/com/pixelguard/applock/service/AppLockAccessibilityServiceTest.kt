@@ -283,4 +283,37 @@ class AppLockAccessibilityServiceTest {
         assertThat(SessionManager.currentForegroundPackage).isNull()
         assertThat(SessionManager.isTemporarilyUnlocked(instagramPackage, 0)).isFalse()
     }
+
+    // --- 7. Cold-Start Fail-Closed Protection (C-2) Tests ---
+
+    @Test
+    fun onAccessibilityEvent_whenCachesUnready_failsClosedAndLocksUntrustedPackage() {
+        service.setCachesReadyForTest(false)
+
+        val event = AccessibilityEvent.obtain().apply {
+            eventType = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+            packageName = "com.untrusted.unknownapp"
+            className = "com.untrusted.unknownapp.MainActivity"
+        }
+        service.onAccessibilityEvent(event)
+
+        val startedIntent = shadowOf(service).nextStartedActivity
+        assertThat(startedIntent).isNotNull()
+        assertThat(startedIntent.getStringExtra(LockActivity.EXTRA_TARGET_PACKAGE)).isEqualTo("com.untrusted.unknownapp")
+    }
+
+    @Test
+    fun onAccessibilityEvent_whenCachesUnready_doesNotLockSystemOrTransientPackages() {
+        service.setCachesReadyForTest(false)
+
+        val event = AccessibilityEvent.obtain().apply {
+            eventType = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+            packageName = pixelLauncherPackage
+            className = "com.google.android.apps.nexuslauncher.NexusLauncherActivity"
+        }
+        service.onAccessibilityEvent(event)
+
+        val startedIntent = shadowOf(service).nextStartedActivity
+        assertThat(startedIntent).isNull()
+    }
 }

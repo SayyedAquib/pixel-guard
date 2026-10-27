@@ -1,5 +1,10 @@
 package com.pixelguard.applock.ui.settings
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -51,6 +56,7 @@ import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.WarningAmber
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -100,6 +106,16 @@ fun SettingsScreen(
     onNavigateBack: () -> Unit
 ) {
     val prefs by viewModel.preferences.collectAsState()
+    val context = LocalContext.current
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            viewModel.updatePreferences(prefs.copy(isIntruderSelfieEnabled = true))
+        } else {
+            viewModel.updatePreferences(prefs.copy(isIntruderSelfieEnabled = false))
+        }
+    }
     var showChangePinSheet by remember { mutableStateOf(false) }
     var showGracePeriodSheet by remember { mutableStateOf(false) }
     var showScheduleSheet by remember { mutableStateOf(false) }
@@ -280,7 +296,7 @@ fun SettingsScreen(
 
                 SettingsActionRow(
                     title = "Change Passcode",
-                    subtitle = "Update your 4-digit backup passcode",
+                    subtitle = "Update your 6-digit backup passcode",
                     icon = Icons.Default.Key,
                     onClick = { showChangePinSheet = true }
                 )
@@ -309,7 +325,7 @@ fun SettingsScreen(
 
                 SettingsSwitchRow(
                     title = "Hide in App Switcher",
-                    subtitle = "Blurs app screens and blocks screenshots when switching between apps",
+                    subtitle = "Protects Pixel Guard screens and recent previews with hardware FLAG_SECURE",
                     icon = Icons.Default.VisibilityOff,
                     checked = prefs.isRecentsMaskingEnabled,
                     onCheckedChange = { viewModel.updatePreferences(prefs.copy(isRecentsMaskingEnabled = it)) }
@@ -335,10 +351,20 @@ fun SettingsScreen(
 
                 SettingsSwitchRow(
                     title = "Intruder Selfie",
-                    subtitle = "Silently takes a photo with the front camera when someone enters the wrong passcode",
+                    subtitle = "Silently takes a front-camera photo when someone repeatedly fails verification",
                     icon = Icons.Default.CameraAlt,
                     checked = prefs.isIntruderSelfieEnabled,
-                    onCheckedChange = { viewModel.updatePreferences(prefs.copy(isIntruderSelfieEnabled = it)) }
+                    onCheckedChange = { enabled ->
+                        if (enabled) {
+                            if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                                viewModel.updatePreferences(prefs.copy(isIntruderSelfieEnabled = true))
+                            } else {
+                                cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                            }
+                        } else {
+                            viewModel.updatePreferences(prefs.copy(isIntruderSelfieEnabled = false))
+                        }
+                    }
                 )
 
                 HorizontalDivider(
@@ -709,7 +735,7 @@ fun ChangePinSheetContent(
             Column {
                 Text(text = "Change Passcode", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(
-                    text = if (!isCurrentPinVerified) "Enter current passcode to continue" else "Enter a new 4-digit passcode",
+                    text = if (!isCurrentPinVerified) "Enter current passcode to continue" else "Enter a new 6-digit passcode",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -719,8 +745,8 @@ fun ChangePinSheetContent(
         if (!isCurrentPinVerified) {
             OutlinedTextField(
                 value = currentPin,
-                onValueChange = { if (it.length <= 4 && it.all { ch -> ch.isDigit() }) currentPin = it },
-                label = { Text("Current 4-Digit Passcode") },
+                onValueChange = { if (it.length <= 6 && it.all { ch -> ch.isDigit() }) currentPin = it },
+                label = { Text("Current 6-Digit Passcode") },
                 visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                 singleLine = true,
@@ -729,8 +755,8 @@ fun ChangePinSheetContent(
         } else {
             OutlinedTextField(
                 value = newPin,
-                onValueChange = { if (it.length <= 4 && it.all { ch -> ch.isDigit() }) newPin = it },
-                label = { Text("New 4-Digit Passcode") },
+                onValueChange = { if (it.length <= 6 && it.all { ch -> ch.isDigit() }) newPin = it },
+                label = { Text("New 6-Digit Passcode") },
                 visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                 singleLine = true,
@@ -739,7 +765,7 @@ fun ChangePinSheetContent(
 
             OutlinedTextField(
                 value = confirmPin,
-                onValueChange = { if (it.length <= 4 && it.all { ch -> ch.isDigit() }) confirmPin = it },
+                onValueChange = { if (it.length <= 6 && it.all { ch -> ch.isDigit() }) confirmPin = it },
                 label = { Text("Confirm Passcode") },
                 visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
@@ -763,8 +789,8 @@ fun ChangePinSheetContent(
             if (!isCurrentPinVerified) {
                 Button(
                     onClick = {
-                        if (currentPin.length != 4) {
-                            error = "Current passcode must be 4 digits"
+                        if (currentPin.length != 6) {
+                            error = "Current passcode must be 6 digits"
                             return@Button
                         }
                         scope.launch {
@@ -782,21 +808,24 @@ fun ChangePinSheetContent(
                             }
                         }
                     },
-                    enabled = currentPin.length == 4
+                    enabled = currentPin.length == 6
                 ) {
                     Text("Verify & Continue")
                 }
             } else {
                 Button(
                     onClick = {
-                        if (newPin.length != 4) {
-                            error = "Passcode must be exactly 4 digits"
+                        if (newPin.length != 6) {
+                            error = "Passcode must be exactly 6 digits"
+                        } else if (com.pixelguard.applock.AppLockApplication.instance.cryptoManager.isWeakPin(newPin)) {
+                            error = "PIN is too weak or sequential (e.g. 123456, 000000). Choose a stronger PIN."
                         } else if (newPin != confirmPin) {
                             error = "Passcodes do not match"
                         } else {
                             onSavePin(newPin)
                         }
-                    }
+                    },
+                    enabled = newPin.length == 6 && confirmPin.length == 6
                 ) {
                     Text("Save Passcode")
                 }

@@ -15,7 +15,7 @@ class LockPreferencesTest {
         assertTrue("Biometrics should be enabled by default", prefs.isBiometricsEnabled)
         assertEquals("Lock type should default to PIN", LockType.PIN, prefs.lockType)
         assertEquals("Grace period should default to 0s (instant relock)", 0, prefs.gracePeriodSeconds)
-        assertTrue("Intruder selfie should be enabled by default", prefs.isIntruderSelfieEnabled)
+        assertFalse("Intruder selfie should be disabled by default (H-8)", prefs.isIntruderSelfieEnabled)
         assertEquals("Failed attempts threshold should default to 3", 3, prefs.failedAttemptsThreshold)
         assertFalse("Decoy crash should be disabled by default", prefs.isDecoyCrashEnabled)
         assertTrue("Notification shield should be enabled by default", prefs.isNotificationShieldEnabled)

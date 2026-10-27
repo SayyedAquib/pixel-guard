@@ -1,3 +1,6 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -21,11 +24,40 @@ android {
         }
     }
 
+    val keystoreConfigFile = rootProject.file("keystore.properties")
+    val keystoreProps = Properties().apply {
+        if (keystoreConfigFile.exists()) {
+            FileInputStream(keystoreConfigFile).use { load(it) }
+        }
+    }
+
+    signingConfigs {
+        create("release") {
+            val storeFilePath = keystoreProps.getProperty("RELEASE_STORE_FILE")
+                ?: System.getenv("KEYSTORE_PATH")
+            val storePass = keystoreProps.getProperty("RELEASE_STORE_PASSWORD")
+                ?: System.getenv("KEYSTORE_PASSWORD")
+            val keyAl = keystoreProps.getProperty("RELEASE_KEY_ALIAS")
+                ?: System.getenv("KEY_ALIAS")
+            val keyPass = keystoreProps.getProperty("RELEASE_KEY_PASSWORD")
+                ?: System.getenv("KEY_PASSWORD")
+
+            if (storeFilePath != null && storePass != null && keyAl != null && keyPass != null) {
+                storeFile = rootProject.file(storeFilePath)
+                storePassword = storePass
+                keyAlias = keyAl
+                keyPassword = keyPass
+            } else {
+                throw GradleException("Release signing credentials missing. Please configure keystore.properties based on keystore.properties.example")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

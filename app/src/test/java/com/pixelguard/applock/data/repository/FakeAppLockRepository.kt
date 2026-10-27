@@ -70,13 +70,40 @@ class FakeAppLockRepository(
         return _hasPinSetFlow.value
     }
 
-    override suspend fun setPin(newPin: String) {
+    private var storedRecoveryCode: String? = null
+
+    override suspend fun setPin(newPin: String): String {
         storedPin = newPin
+        storedRecoveryCode = "ABCD-EFGH-JKLM-NPQR"
         _hasPinSetFlow.value = true
+        return storedRecoveryCode!!
+    }
+
+    override suspend fun verifyPinResult(inputPin: String, packageName: String?): VerifyPinResult {
+        return if (storedPin != null && storedPin == inputPin) {
+            VerifyPinResult.Success
+        } else {
+            VerifyPinResult.WrongPin(attemptsRemaining = 4, attemptsUntilLockout = 4)
+        }
     }
 
     override suspend fun verifyPin(inputPin: String): Boolean {
         return storedPin != null && storedPin == inputPin
+    }
+
+    override suspend fun verifyRecoveryCode(code: String): Boolean {
+        return storedRecoveryCode != null && storedRecoveryCode?.replace("-", "")?.equals(code.replace("-", ""), ignoreCase = true) == true
+    }
+
+    override suspend fun resetWithRecoveryCode(code: String): Boolean {
+        return if (verifyRecoveryCode(code)) {
+            storedPin = null
+            storedRecoveryCode = null
+            _hasPinSetFlow.value = false
+            true
+        } else {
+            false
+        }
     }
 
     override suspend fun getInstalledApps(): List<AppItem> {

@@ -25,6 +25,7 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
 import com.pixelguard.applock.AppLockApplication
+import com.pixelguard.applock.BuildConfig
 import com.pixelguard.applock.data.model.IntruderRecord
 import com.pixelguard.applock.data.model.isPinOnly
 import com.pixelguard.applock.domain.usecase.SessionManager
@@ -39,6 +40,7 @@ class LockActivity : FragmentActivity() {
 
     private var targetPackage: String = ""
     private var appName: String = ""
+    private var hasCapturedSelfieThisSession: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -94,7 +96,7 @@ class LockActivity : FragmentActivity() {
             try {
                 window.setHideOverlayWindows(true)
             } catch (e: Exception) {
-                android.util.Log.w("LockActivity", "Unable to setHideOverlayWindows: ${e.message}")
+                if (BuildConfig.DEBUG) android.util.Log.w("LockActivity", "Unable to setHideOverlayWindows: ${e.message}")
             }
         }
 
@@ -153,20 +155,25 @@ class LockActivity : FragmentActivity() {
                         onPinSubmitted = { pin ->
                             lifecycleScope.launch {
                                 val currentPrefs = repository.preferences.first()
-                                if (SessionManager.isLockedOut(targetPackage)) {
-                                    hapticManager.authFailed(currentPrefs.isHapticsEnabled)
-                                    return@launch
-                                }
-                                val isCorrect = repository.verifyPin(pin)
-                                if (isCorrect) {
-                                    hapticManager.unlockSuccess(currentPrefs.isHapticsEnabled)
-                                    SessionManager.resetFailedAttempts(targetPackage)
-                                    unlockAndFinish()
-                                } else {
-                                    val attempts = SessionManager.incrementFailedAttempts(targetPackage)
-                                    hapticManager.authFailed(currentPrefs.isHapticsEnabled)
-                                    if (currentPrefs.isIntruderSelfieEnabled && attempts >= currentPrefs.failedAttemptsThreshold) {
-                                        captureIntruder()
+                                when (repository.verifyPinResult(pin, targetPackage)) {
+                                    is com.pixelguard.applock.data.repository.VerifyPinResult.Success -> {
+                                        hapticManager.unlockSuccess(currentPrefs.isHapticsEnabled)
+                                        hasCapturedSelfieThisSession = false
+                                        unlockAndFinish()
+                                    }
+                                    is com.pixelguard.applock.data.repository.VerifyPinResult.WrongPin -> {
+                                        hapticManager.authFailed(currentPrefs.isHapticsEnabled)
+                                        val attempts = SessionManager.getFailedAttempts(targetPackage)
+                                        if (currentPrefs.isIntruderSelfieEnabled && attempts >= currentPrefs.failedAttemptsThreshold && !hasCapturedSelfieThisSession) {
+                                            hasCapturedSelfieThisSession = true
+                                            captureIntruder()
+                                        }
+                                    }
+                                    is com.pixelguard.applock.data.repository.VerifyPinResult.LockedOut -> {
+                                        hapticManager.authFailed(currentPrefs.isHapticsEnabled)
+                                    }
+                                    is com.pixelguard.applock.data.repository.VerifyPinResult.Unrecoverable -> {
+                                        hapticManager.authFailed(currentPrefs.isHapticsEnabled)
                                     }
                                 }
                             }
@@ -246,7 +253,7 @@ class LockActivity : FragmentActivity() {
         try {
             biometricPrompt.authenticate(promptInfo)
         } catch (e: Exception) {
-            android.util.Log.e("LockActivity", "Biometric authentication error: ${e.message}")
+            if (BuildConfig.DEBUG) android.util.Log.e("LockActivity", "Biometric authentication error: ${e.message}")
         }
     }
 
@@ -283,6 +290,18 @@ class LockActivity : FragmentActivity() {
         super.onMultiWindowModeChanged(isInMultiWindowMode, newConfig)
         if (isInMultiWindowMode) {
             goToHomeAndFinish()
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // H-4 Resume Guard: Revalidate that target app was actually unlocked.
+        // If an interrupting activity (phone call, system dialog) finishes and LockActivity resumes,
+        // ensure target app remains locked unless an explicit successful unlock occurred.
+        if (!isFinishing && targetPackage.isNotEmpty() && intent.action != ACTION_PAUSE_REQUEST) {
+            if (!SessionManager.isRecentlyUnlocked(targetPackage, 3000L)) {
+                SessionManager.lockPackage(targetPackage)
+            }
         }
     }
 

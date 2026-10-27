@@ -15,7 +15,7 @@ data class LockPreferences(
     val isBiometricsEnabled: Boolean = true,
     val lockType: LockType = LockType.PIN,
     val gracePeriodSeconds: Int = 0, // 0 = Immediately on app exit/screen off
-    val isIntruderSelfieEnabled: Boolean = true,
+    val isIntruderSelfieEnabled: Boolean = false,
     val failedAttemptsThreshold: Int = 3,
     val isDecoyCrashEnabled: Boolean = false,
     val isNotificationShieldEnabled: Boolean = true,

@@ -137,7 +137,7 @@ class SettingsScreenUiTest {
         }
 
         composeTestRule.onNodeWithText("Change Passcode").performScrollTo().performClick()
-        composeTestRule.onNodeWithText("Current 4-Digit Passcode").assertExists()
+        composeTestRule.onNodeWithText("Current 6-Digit Passcode").assertExists()
     }
 
     @Test
@@ -154,8 +154,8 @@ class SettingsScreenUiTest {
         }
 
         // Verify sheet fields exist and test mismatch validation
-        composeTestRule.onNodeWithText("New 4-Digit Passcode").performTextInput("1234")
-        composeTestRule.onNodeWithText("Confirm Passcode").performTextInput("9999")
+        composeTestRule.onNodeWithText("New 6-Digit Passcode").performTextInput("839201")
+        composeTestRule.onNodeWithText("Confirm Passcode").performTextInput("999999")
         composeTestRule.onNodeWithText("Save Passcode").performClick()
 
         // Mismatch validation error
@@ -164,10 +164,10 @@ class SettingsScreenUiTest {
 
         // Clear and enter matching PIN
         composeTestRule.onNodeWithText("Confirm Passcode").performTextClearance()
-        composeTestRule.onNodeWithText("Confirm Passcode").performTextInput("1234")
+        composeTestRule.onNodeWithText("Confirm Passcode").performTextInput("839201")
         composeTestRule.onNodeWithText("Save Passcode").performClick()
 
-        assertThat(savedPin).isEqualTo("1234")
+        assertThat(savedPin).isEqualTo("839201")
     }
 
     @Test

@@ -14,16 +14,21 @@ import com.pixelguard.applock.data.model.getAppTags
 import com.pixelguard.applock.data.model.getUserCustomTags
 import android.graphics.Bitmap
 import androidx.core.graphics.drawable.toBitmap
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.util.Locale
 
 class AppLockRepositoryImpl(
     private val context: Context,
@@ -38,8 +43,34 @@ class AppLockRepositoryImpl(
     private val _intruderRecords = MutableStateFlow<List<IntruderRecord>>(emptyList())
     override val intruderRecords: Flow<List<IntruderRecord>> = _intruderRecords.asStateFlow()
 
+    private val repoScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    @androidx.annotation.VisibleForTesting
+    fun cancelScope() {
+        repoScope.cancel()
+    }
+
     init {
-        loadIntruderRecords()
+        repoScope.launch {
+            loadIntruderRecords()
+        }
+        repoScope.launch {
+            kotlinx.coroutines.flow.combine(lockedPackages, preferences) { pkgs, prefs ->
+                com.pixelguard.applock.data.local.SecuritySnapshot(
+                    lockedPackages = pkgs,
+                    isSettingsProtected = prefs.isSettingsProtected,
+                    isPlayStoreProtected = prefs.isPlayStoreProtected,
+                    isScheduleEnabled = prefs.isScheduleEnabled,
+                    scheduleStartHour = prefs.scheduleStartHour,
+                    scheduleEndHour = prefs.scheduleEndHour,
+                    gracePeriodSeconds = prefs.gracePeriodSeconds,
+                    isPerAppGraceEnabled = prefs.isPerAppGraceEnabled,
+                    appGracePeriodsJson = prefs.appGracePeriodsJson
+                )
+            }.collect { snapshot ->
+                com.pixelguard.applock.data.local.SecuritySnapshotManager.saveSnapshot(context, snapshot)
+            }
+        }
     }
 
     override suspend fun setAppLocked(packageName: String, locked: Boolean) {
@@ -75,47 +106,124 @@ class AppLockRepositoryImpl(
         return preferencesDataStore.pinHashFlow.first() != null
     }
 
-    override suspend fun setPin(newPin: String) {
-        val salt = cryptoManager.generateSalt()
-        val chars = newPin.toCharArray()
-        val hash = cryptoManager.hashPin(chars, salt) // SEC-006: hashPin zeroes chars buffer
-        val saltHex = salt.joinToString("") { "%02x".format(it) }
-        // PG-SEC-14: Hardware AES-GCM envelope encryption before storing at rest in DataStore
-        val encryptedHash = cryptoManager.encryptString(hash)
-        val encryptedSalt = cryptoManager.encryptString(saltHex)
-        preferencesDataStore.savePin(encryptedHash, encryptedSalt)
+    override suspend fun setPin(newPin: String): String = withContext(Dispatchers.Default) {
+        if (cryptoManager.isWeakPin(newPin)) {
+            throw IllegalArgumentException("Weak or invalid PIN pattern: 6-digit PIN required")
+        }
+        val pinSalt = cryptoManager.generateSalt()
+        val pinHash = cryptoManager.hashPin(newPin, pinSalt)
+        val pinSaltHex = cryptoManager.byteArrayToHex(pinSalt)
+
+        val encryptedHash = cryptoManager.encryptString(pinHash, "pin_hash")
+        val encryptedSalt = cryptoManager.encryptString(pinSaltHex, "pin_salt")
+
+        val recoveryCode = cryptoManager.generateRecoveryCode()
+        val normRecoveryCode = cryptoManager.normalizeRecoveryCode(recoveryCode)
+        val recoverySalt = cryptoManager.generateSalt()
+        val recoveryHash = cryptoManager.hashPin(normRecoveryCode, recoverySalt)
+        val recoverySaltHex = cryptoManager.byteArrayToHex(recoverySalt)
+
+        val encryptedRecoveryHash = cryptoManager.encryptString(recoveryHash, "recovery_hash")
+        val encryptedRecoverySalt = cryptoManager.encryptString(recoverySaltHex, "recovery_salt")
+
+        withContext(Dispatchers.IO) {
+            preferencesDataStore.savePinWithRecovery(
+                encryptedHash,
+                encryptedSalt,
+                encryptedRecoveryHash,
+                encryptedRecoverySalt
+            )
+        }
+        recoveryCode
     }
 
-    override suspend fun verifyPin(inputPin: String): Boolean {
-        val rawStoredHash = preferencesDataStore.pinHashFlow.first()
-        val rawStoredSalt = preferencesDataStore.pinSaltFlow.first()
+    override suspend fun verifyPinResult(inputPin: String, packageName: String?): VerifyPinResult = withContext(Dispatchers.Default) {
+        val targetPackage = packageName ?: context.packageName
+        if (com.pixelguard.applock.domain.usecase.SessionManager.isLockedOut(targetPackage)) {
+            val remainingSec = com.pixelguard.applock.domain.usecase.SessionManager.getRemainingLockoutSeconds(targetPackage)
+            return@withContext VerifyPinResult.LockedOut(remainingSec)
+        }
+
+        val creds = preferencesDataStore.pinCredentialsFlow.first()
+        val rawStoredHash = creds.pinHash
+        val rawStoredSalt = creds.pinSalt
         if (rawStoredHash == null || rawStoredSalt == null) {
-            // No PIN has been configured yet — deny access until user sets one via Onboarding.
-            return false
+            return@withContext VerifyPinResult.WrongPin(0, 0)
         }
-        // Seamless automatic migration (PG-SEC-14): decrypt envelope or handle legacy plaintext
+
         val storedHash = try {
-            cryptoManager.decryptString(rawStoredHash)
+            cryptoManager.decryptString(rawStoredHash, "pin_hash")
         } catch (_: Exception) {
-            rawStoredHash
+            return@withContext VerifyPinResult.Unrecoverable
         }
+
         val storedSaltHex = try {
-            cryptoManager.decryptString(rawStoredSalt)
+            cryptoManager.decryptString(rawStoredSalt, "pin_salt")
         } catch (_: Exception) {
-            rawStoredSalt
+            return@withContext VerifyPinResult.Unrecoverable
         }
-        // Transparently upgrade legacy plaintext to encrypted envelope if needed
-        if (!rawStoredHash.startsWith("enc:") || !rawStoredSalt.startsWith("enc:")) {
-            try {
-                val encHash = cryptoManager.encryptString(storedHash)
-                val encSalt = cryptoManager.encryptString(storedSaltHex)
-                preferencesDataStore.savePin(encHash, encSalt)
-            } catch (_: Exception) {}
+
+        val salt = try {
+            cryptoManager.hexToByteArray(storedSaltHex, 16)
+        } catch (_: Exception) {
+            return@withContext VerifyPinResult.Unrecoverable
         }
-        val salt = storedSaltHex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
-        val chars = inputPin.toCharArray()
-        val computedHash = cryptoManager.hashPin(chars, salt) // SEC-006: hashPin zeroes chars buffer
-        return cryptoManager.verifyHash(computedHash, storedHash)
+
+        val computedHash = cryptoManager.hashPin(inputPin, salt)
+        val isCorrect = cryptoManager.verifyHash(computedHash, storedHash)
+
+        if (isCorrect) {
+            com.pixelguard.applock.domain.usecase.SessionManager.resetFailedAttempts(targetPackage)
+            VerifyPinResult.Success
+        } else {
+            com.pixelguard.applock.domain.usecase.SessionManager.incrementFailedAttempts(targetPackage)
+            val remainingSec = com.pixelguard.applock.domain.usecase.SessionManager.getRemainingLockoutSeconds(targetPackage)
+            if (remainingSec > 0) {
+                VerifyPinResult.LockedOut(remainingSec)
+            } else {
+                val attemptsUntilLockout = com.pixelguard.applock.domain.usecase.SessionManager.getAttemptsUntilLockout(targetPackage)
+                VerifyPinResult.WrongPin(attemptsRemaining = attemptsUntilLockout, attemptsUntilLockout = attemptsUntilLockout)
+            }
+        }
+    }
+
+    override suspend fun verifyRecoveryCode(code: String): Boolean = withContext(Dispatchers.Default) {
+        val normCode = cryptoManager.normalizeRecoveryCode(code)
+        if (normCode.length != 16) return@withContext false
+
+        val creds = preferencesDataStore.pinCredentialsFlow.first()
+        val rawRecHash = creds.recoveryHash ?: return@withContext false
+        val rawRecSalt = creds.recoverySalt ?: return@withContext false
+
+        val storedRecHash = try {
+            cryptoManager.decryptString(rawRecHash, "recovery_hash")
+        } catch (_: Exception) {
+            return@withContext false
+        }
+
+        val storedRecSaltHex = try {
+            cryptoManager.decryptString(rawRecSalt, "recovery_salt")
+        } catch (_: Exception) {
+            return@withContext false
+        }
+
+        val salt = try {
+            cryptoManager.hexToByteArray(storedRecSaltHex, 16)
+        } catch (_: Exception) {
+            return@withContext false
+        }
+
+        val computedHash = cryptoManager.hashPin(normCode, salt)
+        cryptoManager.verifyHash(computedHash, storedRecHash)
+    }
+
+    override suspend fun resetWithRecoveryCode(code: String): Boolean = withContext(Dispatchers.Default) {
+        if (!verifyRecoveryCode(code)) return@withContext false
+        withContext(Dispatchers.IO) {
+            preferencesDataStore.clearPinAndCredentials()
+            com.pixelguard.applock.domain.usecase.SessionManager.resetFailedAttempts(context.packageName)
+        }
+        true
     }
 
     override suspend fun getInstalledApps(): List<AppItem> = withContext(Dispatchers.IO) {
@@ -160,11 +268,11 @@ class AppLockRepositoryImpl(
             } catch (_: Exception) {}
         }
 
-        apps.sortedWith(compareBy({ !it.isLocked }, { it.appName.lowercase() }))
+        apps.sortedWith(compareBy({ !it.isLocked }, { it.appName.lowercase(Locale.ROOT) }))
     }
 
     private fun categorizePackage(packageName: String, appInfo: ApplicationInfo): AppCategory {
-        val lower = packageName.lowercase()
+        val lower = packageName.lowercase(Locale.ROOT)
         return when {
             // Social / Messaging
             lower.contains("whatsapp") || lower.contains("instagram") ||

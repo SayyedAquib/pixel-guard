@@ -15,6 +15,7 @@ class SessionManagerTest {
     fun setUp() {
         SessionManager.clearAllSessions()
         SessionManager.resumeProtection()
+        SessionManager.resetAllLockoutsForTest()
     }
 
     // --- Temporary Unlock & Grace Period Tests ---
@@ -367,5 +368,29 @@ class SessionManagerTest {
         assertEquals(0, SessionManager.getAttemptsUntilLockout(testPackage))
         SessionManager.resetFailedAttempts(testPackage)
         assertEquals(5, SessionManager.getAttemptsUntilLockout(testPackage))
+    }
+
+    @Test
+    fun syncPersistedLockout_clockTampering_failsClosedToMaxLockout() {
+        val now = System.currentTimeMillis()
+        // Clock manipulated 2 days into the future:
+        SessionManager.syncPersistedLockout(
+            attempts = 10,
+            wallClockExpiryMs = now + 172_800_000L,
+            durationRemainingMs = 300_000L,
+            currentWallTime = now
+        )
+        assertTrue("Future clock tampering must fail-closed (M-11)", SessionManager.isLockedOut(testPackage))
+        assertTrue(SessionManager.getRemainingLockoutSeconds(testPackage) in 290..300)
+
+        // Clock manipulated into past with duration remaining:
+        SessionManager.syncPersistedLockout(
+            attempts = 5,
+            wallClockExpiryMs = now - 100_000L,
+            durationRemainingMs = 30_000L,
+            currentWallTime = now
+        )
+        assertTrue("Past clock tampering with remaining duration must remain locked out (M-11)", SessionManager.isLockedOut(testPackage))
+        assertTrue(SessionManager.getRemainingLockoutSeconds(testPackage) in 25..30)
     }
 }

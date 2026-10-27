@@ -354,9 +354,24 @@
   3. Added `.\gradlew.bat testFast` task to run only fast unit tests (slashing test execution time from 44.4s down to 14.9s, a 66% improvement).
   4. Updated documentation in `AGENTS.md`, `docs/TESTING.md`, `docs/DECISIONS.md` (ADR 041), and `docs/MEMORY.md`.
 
+## Session 55 (2026-10-27)
+- **Problem**: Full static security review (OWASP Mobile Top 10 2024 / MASVS) identified 39 vulnerabilities: 4 Critical, 8 High, 14 Medium, and 13 Low across signing, cold-start race conditions, biometric policy bypasses, notification destruction, PIN entropy, and unauthenticated storage.
+- **Remediation Completed (All 39 Items)**:
+  1. **C-1 (Release Signing)**: Generated dedicated release keystore (`keystore/pixelguard-release.jks`, RSA 4096 / SHA384) with `keystore.properties` support; eliminated debug keystore signing for release builds.
+  2. **C-2 (Accessibility Fail-Closed)**: Created `SecuritySnapshotManager` with atomic disk snapshots (`security_snapshot.json`); `AppLockAccessibilityService` synchronously loads snapshot on creation; flow collectors wrapped in `SupervisorJob()` and `.catch {}`; non-system packages blocked if caches unready.
+  3. **C-3 (Auth Gate Policy)**: Hardened `MainActivity` and `LockActivity` auth gates to strictly honor `isBiometricsEnabled`, night PIN-only lockdown, and active progressive lockouts before invoking `BiometricPrompt`. Disabled hidden button touch targets.
+  4. **C-4 & H-8 (Notification & Camera Delivery)**: Asserted `areNotificationsEnabled()` and channel availability before cancelling notifications (fail-closed toward delivery); added `POST_NOTIFICATIONS` runtime permission launcher in `OnboardingScreen`; set default `isIntruderSelfieEnabled = false` and added on-demand `CAMERA` runtime request in Settings.
+  5. **H-1, H-2 & H-3 (PIN Entropy & Recovery)**: Standardized to 6-digit Master Passcode (`MASTER_PIN_LENGTH = 6`); added `CryptoManager.isWeakPin()` checking repetition, sequences, and blocklists; generated 16-character base32 recovery key (`XXXX-XXXX-XXXX-XXXX`) presented in onboarding with monospace styling and 1-tap clipboard copy; enforced strict `Locale.ROOT` in hex conversions.
+  6. **H-4 & M-7 (Lock Activity & Window Surfaces)**: Removed `noHistory="true"` on `LockActivity` and added `onResume()` revalidation; set `windowIsTranslucent = false` and opaque background `#FF0F141A` in theme overlays.
+  7. **H-5 & H-6 (Tapjacking & Recents)**: Enforced `window.setHideOverlayWindows(true)` and `window.decorView.filterTouchesWhenObscured = true` across activities; clarified Recents privacy copy.
+  8. **M-1, M-2 & M-10 (Crypto & Storage Envelopes)**: Introduced `enc:v1:` authenticated envelopes with AAD context binding (`pin_hash`, `pin_salt`, etc.) and typed `VerifyPinResult.Unrecoverable`; single atomic snapshot reads in `verifyPinResult`.
+  9. **M-3, M-6 & M-9 (Camera, Intents & Manifest)**: Added `AtomicBoolean` cleanup guard on Camera2; unique URI routing on notification `PendingIntent`s; pruned unneeded permissions (`QUERY_ALL_PACKAGES`, `PACKAGE_USAGE_STATS`, invalid `HIDE_OVERLAY_WINDOWS`).
+  10. **M-11, M-14 & Lows**: Added clock-tamper defense in `SessionManager` (300s clamp); sanitized release log statements behind `if (BuildConfig.DEBUG)`; exact colon parsing for permission checks; updated test suites to 164 passing tests (100% pass rate).
+- **Verification**: `.\gradlew.bat testFast` passed in ~15s; `.\gradlew.bat testDebugUnitTest` passed all 164 tests; `.\gradlew.bat assembleRelease` successfully compiled and signed production release APK (3.68MB).
+
 ## Next Steps
 - Per strict user mandate, calculator launcher disguises and fake calculation passcodes are permanently banned across all future development.
-- Optional on-device Compose instrumentation tests (`connectedDebugAndroidTest`) on physical Pixel 9.
+- Optional on-device Compose instrumentation tests (`connectedDebugAndroidTest`) on physical Pixel 9 when device is connected via ADB.
 
 ## Things to Be Careful About
 - Never run Gradle without setting `$env:JAVA_HOME` and `$env:ANDROID_HOME`.

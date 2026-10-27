@@ -193,12 +193,22 @@ Standard 4dp/8dp grid system:
 - **Styling**: `PixelAmber` container (`#F9AB00` with 0.12f alpha fill and 0.35f alpha outline border), Titan M2 shield badge, and high-visibility warning iconography.
 - **Fast Remediation**: Contains 1-tap `[Turn On Recommended Protections]` elevated button with `ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)`. Tapping instantly arms both Phone Settings Protection and App Switcher Hiding, closing the privacy gap without tedious manual toggle hunting.
 
+### Liquid Ripple PIN Dots (6-Digit Indicator)
+- **6-Dot Geometry**: 6 individual spring-animated indicator dots (`MASTER_PIN_LENGTH = 6`) with spring physics (`Spring.DampingRatioMediumBouncy`, `Spring.StiffnessMediumLow`) triggering a scale bloom (`1.28f` to `1.0f`) on fill, and coordinated 3-stage failure shake and dissolve.
+- **Keypad Dynamic Reshuffle**: Keypad positions re-scramble per verification attempt when scramble mode is enabled, preventing shoulder-surfing or smudge detection.
+
+### Master Recovery Key Presentation Dialog (Onboarding)
+- **Modal Architecture**: Rendered upon successful Step 2 passcode creation.
+- **Monospace Container**: 16-character alphanumeric key rendered in unambiguous base32 (`XXXX-XXXX-XXXX-XXXX`), set in `FontFamily.Monospace` with `1.5.sp` letter spacing and high-contrast primary accent.
+- **One-Tap Clipboard Copy**: Outlined button with dynamic "Copied to Clipboard!" haptic state.
+- **Explicit User Commitment**: Dismissal requires tapping "I Have Saved My Recovery Key", ensuring the user acknowledges safeguarding their offline recovery credentials.
+
 ### 3-Step Secure Passcode Change Sheet
 - **Modal Architecture**: Integrated inside `ChangePinSheetContent` as a dedicated bottom sheet.
 - **Three-Stage Verification Flow**:
-  1. *Step 1: Current Passcode*: Challenges the user for their existing 4-digit passcode via PBKDF2 hash verification. Prevents unauthorized passcode modification if the phone is momentarily unlocked.
-  2. *Step 2: New 4-Digit Passcode*: User enters the new passcode with real-time numeric masking.
-  3. *Step 3: Confirm New Passcode*: Confirms matching code with error feedback on mismatch.
+  1. *Step 1: Current Passcode*: Challenges the user for their existing 6-digit passcode via PBKDF2 hash verification. Prevents unauthorized passcode modification if the phone is momentarily unlocked.
+  2. *Step 2: New 6-Digit Passcode*: User enters the new passcode with real-time numeric masking and weak-PIN validation.
+  3. *Step 3: Confirm New Passcode*: Confirms matching 6-digit code with error feedback on mismatch.
 - **Visual Hygiene & Security**: All inputs use `PasswordVisualTransformation('\u2022')`, `KeyboardType.NumberPassword`, and auto-advance focus.
 
 ## Do Not

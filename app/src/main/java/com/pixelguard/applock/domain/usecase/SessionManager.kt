@@ -258,13 +258,17 @@ object SessionManager {
             val remainingMs = wallClockExpiryMs - currentWallTime
             // Sanity check: progressive lockout max is 5 minutes (300,000 ms).
             // Guard against impossible future clock jumps or corrupted timestamps.
-            if (remainingMs in 1..300_000L) {
-                val effectiveDuration = if (durationRemainingMs in 1..remainingMs) durationRemainingMs else remainingMs
-                lockoutTimestamps[GLOBAL_PACKAGE] = now() + effectiveDuration
+            val effectiveDuration = if (remainingMs in 1..300_000L) {
+                if (durationRemainingMs in 1..remainingMs) durationRemainingMs else remainingMs
             } else {
-                // Out of range / clock tampering detected: clear invalid lockout
-                onLockoutChanged?.invoke(attempts, 0L, 0L)
+                // Out of range future clock jump: Fail closed with maximum 5-minute penalty (M-11)
+                300_000L
             }
+            lockoutTimestamps[GLOBAL_PACKAGE] = now() + effectiveDuration
+        } else if (durationRemainingMs > 0L) {
+            // Clock was rolled backward behind currentWallTime: enforce durationRemainingMs (M-11)
+            val clamped = durationRemainingMs.coerceIn(1L, 300_000L)
+            lockoutTimestamps[GLOBAL_PACKAGE] = now() + clamped
         }
     }
 
@@ -330,6 +334,12 @@ object SessionManager {
         failedAttempts.remove(GLOBAL_PACKAGE)
         lockoutTimestamps.remove(packageName)
         lockoutTimestamps.remove(GLOBAL_PACKAGE)
+        onLockoutChanged?.invoke(0, 0L, 0L)
+    }
+
+    internal fun resetAllLockoutsForTest() {
+        failedAttempts.clear()
+        lockoutTimestamps.clear()
         onLockoutChanged?.invoke(0, 0L, 0L)
     }
 

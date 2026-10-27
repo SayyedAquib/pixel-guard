@@ -7,20 +7,24 @@ import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import com.pixelguard.applock.AppLockApplication
 import com.pixelguard.applock.BuildConfig
+import com.pixelguard.applock.data.local.SecuritySnapshotManager
 import com.pixelguard.applock.domain.usecase.SessionManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 
 class AppLockAccessibilityService : AccessibilityService() {
 
-    private val scope = CoroutineScope(Dispatchers.Main)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var lastPackage: String = ""
 
     // In-memory cache for zero-latency accessibility interception
     private var cachedLockedPackages: Set<String> = emptySet()
     private var cachedPreferences: com.pixelguard.applock.data.model.LockPreferences = com.pixelguard.applock.data.model.LockPreferences()
+    private var isCachesReady: Boolean = false
 
     private val screenOffReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: android.content.Context?, intent: Intent?) {
@@ -34,16 +38,43 @@ class AppLockAccessibilityService : AccessibilityService() {
     override fun onCreate() {
         super.onCreate()
 
+        // 1. Cold-start fail-closed protection (C-2): Load synchronous disk snapshot immediately
+        val snapshot = SecuritySnapshotManager.loadSnapshot(this)
+        if (snapshot != null) {
+            cachedLockedPackages = snapshot.lockedPackages
+            cachedPreferences = cachedPreferences.copy(
+                isSettingsProtected = snapshot.isSettingsProtected,
+                isPlayStoreProtected = snapshot.isPlayStoreProtected,
+                isScheduleEnabled = snapshot.isScheduleEnabled,
+                scheduleStartHour = snapshot.scheduleStartHour,
+                scheduleEndHour = snapshot.scheduleEndHour,
+                gracePeriodSeconds = snapshot.gracePeriodSeconds,
+                isPerAppGraceEnabled = snapshot.isPerAppGraceEnabled,
+                appGracePeriodsJson = snapshot.appGracePeriodsJson
+            )
+            isCachesReady = true
+        }
+
         val repository = AppLockApplication.instance.repository
         scope.launch {
-            repository.lockedPackages.collect {
-                cachedLockedPackages = it
-            }
+            repository.lockedPackages
+                .catch { e ->
+                    if (BuildConfig.DEBUG) Log.e(TAG, "Error collecting locked packages", e)
+                }
+                .collect {
+                    cachedLockedPackages = it
+                    isCachesReady = true
+                }
         }
         scope.launch {
-            repository.preferences.collect {
-                cachedPreferences = it
-            }
+            repository.preferences
+                .catch { e ->
+                    if (BuildConfig.DEBUG) Log.e(TAG, "Error collecting preferences", e)
+                }
+                .collect {
+                    cachedPreferences = it
+                    isCachesReady = true
+                }
         }
 
         val filter = android.content.IntentFilter(Intent.ACTION_SCREEN_OFF)
@@ -56,10 +87,16 @@ class AppLockAccessibilityService : AccessibilityService() {
 
     internal fun setCachedLockedPackagesForTest(packages: Set<String>) {
         cachedLockedPackages = packages
+        isCachesReady = true
     }
 
     internal fun setCachedPreferencesForTest(preferences: com.pixelguard.applock.data.model.LockPreferences) {
         cachedPreferences = preferences
+        isCachesReady = true
+    }
+
+    internal fun setCachesReadyForTest(ready: Boolean) {
+        isCachesReady = ready
     }
 
     internal fun setLastPackageForTest(pkg: String) {
@@ -83,17 +120,28 @@ class AppLockAccessibilityService : AccessibilityService() {
         val packageName = event.packageName?.toString() ?: return
         val className = event.className?.toString() ?: ""
 
-        // 2. Ignore transient system packages, input methods, verified system credential prompts, and Pixel Guard itself
-        if (isSystemOrTransientPackage(packageName) || isCredentialOrBiometricPrompt(packageName, className)) {
+        // 2. Ignore transient system packages, launchers/recents, input methods, verified system credential prompts, and Pixel Guard itself
+        if (isSystemOrTransientPackage(packageName) || isLauncherOrRecents(packageName) || isCredentialOrBiometricPrompt(packageName, className)) {
+            if (isLauncherOrRecents(packageName)) {
+                SessionManager.onAppSwitched(packageName, cachedPreferences.gracePeriodSeconds)
+                lastPackage = packageName
+            }
             return
         }
 
         val lockedPackages = cachedLockedPackages
         val preferences = cachedPreferences
 
-        val isLocked = lockedPackages.contains(packageName) ||
+        // 3. Cold-Start Fail-Closed Protection (C-2):
+        // If caches have not received their initial emission and no disk snapshot exists,
+        // treat untrusted application packages as locked to eliminate cold-start race conditions.
+        val isLocked = if (!isCachesReady) {
+            true
+        } else {
+            lockedPackages.contains(packageName) ||
                 (preferences.isSettingsProtected && SETTINGS_AND_INSTALLER_PACKAGES.contains(packageName)) ||
                 (preferences.isPlayStoreProtected && packageName == PLAY_STORE_PACKAGE)
+        }
 
         if (BuildConfig.DEBUG) Log.i(TAG, "Window event: $packageName, class=$className, isLocked=$isLocked")
 
@@ -199,7 +247,7 @@ class AppLockAccessibilityService : AccessibilityService() {
     }
 
     override fun onInterrupt() {
-        Log.w(TAG, "Accessibility service interrupted")
+        if (BuildConfig.DEBUG) Log.w(TAG, "Accessibility service interrupted")
     }
 
     override fun onDestroy() {
@@ -207,6 +255,7 @@ class AppLockAccessibilityService : AccessibilityService() {
         try {
             unregisterReceiver(screenOffReceiver)
         } catch (_: Exception) {}
+        scope.cancel()
     }
 
     companion object {

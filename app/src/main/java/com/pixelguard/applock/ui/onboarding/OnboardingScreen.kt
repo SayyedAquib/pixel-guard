@@ -1,9 +1,16 @@
 package com.pixelguard.applock.ui.onboarding
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -36,6 +43,7 @@ import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -64,17 +72,24 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import com.pixelguard.applock.data.local.CryptoManager
 import com.pixelguard.applock.ui.main.MainViewModel
+
+private const val MASTER_PIN_LENGTH = 6
 
 @Composable
 fun OnboardingScreen(
@@ -101,6 +116,15 @@ fun OnboardingScreen(
     val scrollState = rememberScrollState()
     val density = LocalDensity.current
     val isKeyboardOpen = WindowInsets.ime.getBottom(density) > 0
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { _ ->
+        viewModel.checkPermissions(context)
+        openNotificationListenerSettings(context)
+    }
+
+    var generatedRecoveryCode by remember { mutableStateOf<String?>(null) }
 
     // Auto-scroll down to ensure Step 2 PIN fields remain fully visible above the keyboard
     LaunchedEffect(isKeyboardOpen) {
@@ -235,7 +259,15 @@ fun OnboardingScreen(
                 isGranted = permissionStatus.hasNotificationPermission,
                 isSkipped = isNotificationSkipped,
                 icon = Icons.Default.NotificationsActive,
-                onGrant = { openNotificationListenerSettings(context) },
+                onGrant = {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                    ) {
+                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    } else {
+                        openNotificationListenerSettings(context)
+                    }
+                },
                 onSkip = { isNotificationSkipped = true }
             )
 
@@ -278,7 +310,7 @@ fun OnboardingScreen(
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    text = "Use this 4-digit passcode to unlock apps and manage settings",
+                                    text = "Use this 6-digit passcode to unlock apps and manage settings",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -289,15 +321,30 @@ fun OnboardingScreen(
 
                         val focusManager = LocalFocusManager.current
 
+                        fun submitPin() {
+                            focusManager.clearFocus()
+                            if (newPin.length != MASTER_PIN_LENGTH) {
+                                pinError = "Passcode must be exactly 6 digits"
+                            } else if (CryptoManager.isWeakPin(newPin)) {
+                                pinError = "Passcode is too simple. Avoid repetitive or sequential digits."
+                            } else if (newPin != confirmPin) {
+                                pinError = "Passcodes do not match"
+                            } else {
+                                viewModel.setMasterPin(newPin) { recoveryCode ->
+                                    generatedRecoveryCode = recoveryCode
+                                }
+                            }
+                        }
+
                         OutlinedTextField(
                             value = newPin,
                             onValueChange = { input ->
-                                if (input.length <= 4 && input.all { it.isDigit() }) {
+                                if (input.length <= MASTER_PIN_LENGTH && input.all { it.isDigit() }) {
                                     newPin = input
                                     pinError = null
                                 }
                             },
-                            label = { Text("Enter 4-Digit Passcode") },
+                            label = { Text("Enter 6-Digit Passcode") },
                             visualTransformation = PasswordVisualTransformation(),
                             keyboardOptions = KeyboardOptions(
                                 keyboardType = KeyboardType.NumberPassword,
@@ -316,28 +363,19 @@ fun OnboardingScreen(
                         OutlinedTextField(
                             value = confirmPin,
                             onValueChange = { input ->
-                                if (input.length <= 4 && input.all { it.isDigit() }) {
+                                if (input.length <= MASTER_PIN_LENGTH && input.all { it.isDigit() }) {
                                     confirmPin = input
                                     pinError = null
                                 }
                             },
-                            label = { Text("Confirm 4-Digit Passcode") },
+                            label = { Text("Confirm 6-Digit Passcode") },
                             visualTransformation = PasswordVisualTransformation(),
                             keyboardOptions = KeyboardOptions(
                                 keyboardType = KeyboardType.NumberPassword,
                                 imeAction = ImeAction.Done
                             ),
                             keyboardActions = KeyboardActions(
-                                onDone = {
-                                    focusManager.clearFocus()
-                                    if (newPin.length == 4 && confirmPin.length == 4) {
-                                        if (newPin == confirmPin) {
-                                            viewModel.setMasterPin(newPin) { onComplete() }
-                                        } else {
-                                            pinError = "Passcodes do not match"
-                                        }
-                                    }
-                                }
+                                onDone = { submitPin() }
                             ),
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
@@ -356,22 +394,12 @@ fun OnboardingScreen(
                         Spacer(modifier = Modifier.height(18.dp))
 
                         Button(
-                            onClick = {
-                                if (newPin.length != 4) {
-                                    pinError = "Passcode must be exactly 4 digits"
-                                } else if (newPin != confirmPin) {
-                                    pinError = "Passcodes do not match"
-                                } else {
-                                    viewModel.setMasterPin(newPin) {
-                                        onComplete()
-                                    }
-                                }
-                            },
+                            onClick = { submitPin() },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(50.dp),
                             shape = RoundedCornerShape(12.dp),
-                            enabled = newPin.length == 4 && confirmPin.length == 4
+                            enabled = newPin.length == MASTER_PIN_LENGTH && confirmPin.length == MASTER_PIN_LENGTH
                         ) {
                             Text(
                                 text = "Save Passcode & Finish",
@@ -424,6 +452,94 @@ fun OnboardingScreen(
 
             Spacer(modifier = Modifier.height(20.dp))
         }
+    }
+
+    if (generatedRecoveryCode != null) {
+        val recoveryCode = generatedRecoveryCode!!
+        val clipboardManager = LocalClipboardManager.current
+        var isCopied by remember { mutableStateOf(false) }
+
+        AlertDialog(
+            onDismissRequest = { /* Require explicit confirmation button */ },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Key,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(28.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = "Save Master Recovery Key",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Keep this 16-character recovery key in a safe place. If you forget your passcode or security data is reset, this key is the only way to regain access.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                    ) {
+                        Text(
+                            text = recoveryCode,
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.5.sp
+                            ),
+                            color = MaterialTheme.colorScheme.primary,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(vertical = 14.dp, horizontal = 8.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedButton(
+                        onClick = {
+                            clipboardManager.setText(AnnotatedString(recoveryCode))
+                            isCopied = true
+                            Toast.makeText(context, "Recovery key copied to clipboard", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isCopied) Icons.Default.Check else Icons.Default.Info,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(text = if (isCopied) "Copied to Clipboard!" else "Copy Recovery Key")
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        generatedRecoveryCode = null
+                        onComplete()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text(text = "I Have Saved My Recovery Key", fontWeight = FontWeight.Bold)
+                }
+            }
+        )
     }
 }
 

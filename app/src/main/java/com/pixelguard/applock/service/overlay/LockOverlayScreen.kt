@@ -1,6 +1,7 @@
 package com.pixelguard.applock.service.overlay
 
 import android.graphics.drawable.Drawable
+import java.util.Locale
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -100,6 +101,7 @@ fun LockOverlayScreen(
 ) {
     var showDecoy by remember { mutableStateOf(isDecoyEnabled) }
     var pinInput by remember { mutableStateOf("") }
+    var scrambleKey by remember { mutableStateOf(0) }
     var currentLockout by remember { mutableStateOf(lockoutSecondsProvider()) }
     var attemptsUntilLockout by remember { mutableStateOf(attemptsUntilLockoutProvider()) }
     var isUnlocked by remember { mutableStateOf(false) }
@@ -472,7 +474,7 @@ fun LockOverlayScreen(
                             horizontalArrangement = Arrangement.spacedBy(16.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            repeat(4) { index ->
+                            repeat(6) { index ->
                                 val isFilled = index < pinInput.length
                                 val dotScale by animateFloatAsState(
                                     targetValue = if (isFilled) 1.25f else 1.0f,
@@ -540,7 +542,7 @@ fun LockOverlayScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    val digits = remember(isScramblePinEnabled) {
+                    val digits = remember(isScramblePinEnabled, scrambleKey) {
                         if (isScramblePinEnabled) {
                             listOf("0", "1", "2", "3", "4", "5", "6", "7", "8", "9").shuffled()
                         } else {
@@ -573,9 +575,12 @@ fun LockOverlayScreen(
 
                                         IconButton(
                                             onClick = {
-                                                hapticManager.tapClick(isHapticsEnabled)
-                                                onUnlockSuccess()
+                                                if (isBiometricEnabled && !isKeypadDisabled) {
+                                                    hapticManager.tapClick(isHapticsEnabled)
+                                                    onUnlockSuccess()
+                                                }
                                             },
+                                            enabled = isBiometricEnabled && !isKeypadDisabled,
                                             interactionSource = bioInteraction,
                                             modifier = Modifier
                                                 .size(72.dp)
@@ -673,14 +678,14 @@ fun LockOverlayScreen(
                                                     enabled = !isKeypadDisabled
                                                 ) {
                                                     hapticManager.keypadTick(isHapticsEnabled)
-                                                    if (pinInput.length < 4 && !isVerifying) {
+                                                    if (pinInput.length < 6 && !isVerifying) {
                                                         val updated = pinInput + item
                                                         pinInput = updated
-                                                        if (updated.length == 4) {
+                                                        if (updated.length == 6) {
                                                             isVerifying = true
                                                             onPinSubmitted(updated)
                                                             scope.launch {
-                                                                kotlinx.coroutines.delay(120L)
+                                                                kotlinx.coroutines.delay(350L)
                                                                 val lockout = lockoutSecondsProvider()
                                                                 if (lockout > 0) {
                                                                     currentLockout = lockout
@@ -699,6 +704,9 @@ fun LockOverlayScreen(
                                                                     dotFadeAnim.animateTo(0f, tween(120))
                                                                 }
                                                                 pinInput = ""
+                                                                if (isScramblePinEnabled) {
+                                                                    scrambleKey++
+                                                                }
                                                                 dotErrorAnim.snapTo(0f)
                                                                 dotFadeAnim.snapTo(1f)
                                                                 isVerifying = false
@@ -742,7 +750,7 @@ fun LockOverlayScreen(
  * Resolves signature brand color from package name or dynamically samples the app icon.
  */
 fun resolveAppBrandColor(packageName: String, icon: Drawable?, defaultColor: Color): Color {
-    val lower = packageName.lowercase()
+    val lower = packageName.lowercase(Locale.ROOT)
     return when {
         lower.contains("whatsapp") -> Color(0xFF25D366)
         lower.contains("instagram") -> Color(0xFFE1306C)

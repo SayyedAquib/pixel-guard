@@ -54,6 +54,8 @@ buildOutputCleanup/
 # ------------------------------------------------------------------------------
 local.properties
 /local.properties
+keystore.properties
+/keystore.properties
 .env
 .env.*
 secrets.properties

@@ -1,6 +1,7 @@
 package com.pixelguard.applock.ui.logs
 
 import android.graphics.BitmapFactory
+import com.pixelguard.applock.BuildConfig
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -405,7 +406,7 @@ fun rememberDecryptedBitmap(photoPath: String): android.graphics.Bitmap? {
                     bitmap = decoded
                 }
             } catch (e: Exception) {
-                android.util.Log.e("IntruderLogsScreen", "Failed to decode photo: ${e.message}")
+                if (BuildConfig.DEBUG) android.util.Log.e("IntruderLogsScreen", "Failed to decode photo: ${e.message}")
             }
         }
     }

@@ -6,6 +6,15 @@ import com.pixelguard.applock.data.model.IntruderRecord
 import com.pixelguard.applock.data.model.LockPreferences
 import kotlinx.coroutines.flow.Flow
 
+sealed interface VerifyPinResult {
+    data object Success : VerifyPinResult
+    data class WrongPin(val attemptsRemaining: Int, val attemptsUntilLockout: Int) : VerifyPinResult
+    data class LockedOut(val remainingSeconds: Int) : VerifyPinResult
+    data object Unrecoverable : VerifyPinResult
+
+    val isSuccess: Boolean get() = this is Success
+}
+
 interface AppLockRepository {
     val lockedPackages: Flow<Set<String>>
     val preferences: Flow<LockPreferences>
@@ -18,8 +27,11 @@ interface AppLockRepository {
     suspend fun unlockAllApps()
     suspend fun updatePreferences(preferences: LockPreferences)
     suspend fun hasPinSet(): Boolean
-    suspend fun setPin(newPin: String)
-    suspend fun verifyPin(inputPin: String): Boolean
+    suspend fun setPin(newPin: String): String
+    suspend fun verifyPinResult(inputPin: String, packageName: String? = null): VerifyPinResult
+    suspend fun verifyPin(inputPin: String): Boolean = verifyPinResult(inputPin).isSuccess
+    suspend fun verifyRecoveryCode(code: String): Boolean
+    suspend fun resetWithRecoveryCode(code: String): Boolean
     suspend fun getInstalledApps(): List<AppItem>
     suspend fun addIntruderRecord(record: IntruderRecord)
     suspend fun deleteIntruderRecord(id: String)
