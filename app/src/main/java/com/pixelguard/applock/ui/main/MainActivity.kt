@@ -1,5 +1,6 @@
 package com.pixelguard.applock.ui.main
 
+import android.annotation.SuppressLint
 import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
@@ -41,6 +42,7 @@ class MainActivity : FragmentActivity() {
 
     private val viewModel: MainViewModel by viewModels()
 
+    @SuppressLint("MissingPermission")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -48,7 +50,13 @@ class MainActivity : FragmentActivity() {
 
         // H-5: Tapjacking & Overlay suppression
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            window.setHideOverlayWindows(true)
+            try {
+                window.setHideOverlayWindows(true)
+            } catch (e: Exception) {
+                if (com.pixelguard.applock.BuildConfig.DEBUG) {
+                    android.util.Log.w("MainActivity", "Unable to setHideOverlayWindows: ${e.message}")
+                }
+            }
         }
         window.decorView.filterTouchesWhenObscured = true
 

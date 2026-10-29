@@ -1,5 +1,6 @@
 package com.pixelguard.applock.service
 
+import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.Intent
 import android.os.Build
@@ -24,6 +25,7 @@ class PixelGuardTileService : TileService() {
         updateTileState()
     }
 
+    @SuppressLint("StartActivityAndCollapseDeprecated")
     override fun onClick() {
         super.onClick()
         scope.launch {

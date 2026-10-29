@@ -4,7 +4,7 @@
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0.21-7F52FF?style=flat&logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![UI](https://img.shields.io/badge/UI-Jetpack%20Compose%20%2F%20Material%203-4285F4?style=flat&logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
 [![APK Size](https://img.shields.io/badge/APK%20Size-3.3%20MB%20(R8%20Minified)-success?style=flat)](https://github.com)
-[![Tests](https://img.shields.io/badge/Unit%20Tests-28%20Passing-brightgreen?style=flat)](docs/TESTING.md)
+[![Tests](https://img.shields.io/badge/Unit%20Tests-169%20Passing-brightgreen?style=flat)](docs/TESTING.md)
 [![Architecture](https://img.shields.io/badge/Architecture-Clean%20%2F%20UDF-orange?style=flat)](docs/ARCHITECTURE.md)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=flat)](LICENSE)
 
@@ -17,7 +17,7 @@
 ### ⚡ Performance & Core Protection
 - **⚡ Zero-Latency App Interception**: Intercepts foreground app launches within 0–8ms (`AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED`) before the target app renders its first frame.
 - **👆 Zero-Tap Pixel 9 Biometrics**: Automatically engages the Pixel 9's ultrasonic fingerprint sensor and Class 3 Face Unlock on launch via `BiometricPrompt.BIOMETRIC_STRONG`, backed by Titan M2 hardware crypto.
-- **🔑 Dual-Layer Isolated Master PIN**: Custom 4-digit Master PIN salted and stretched with PBKDF2/SHA-256. Completely isolated from the device lockscreen passcode for true two-factor defense.
+- **🔑 6-Digit Master Passcode & 16-Character Offline Recovery Key**: Custom 6-digit Master Passcode salted and stretched with PBKDF2/SHA-256 (200,000 iterations). Enforces entropy checking (`CryptoManager.isWeakPin`) rejecting sequential/repetitive patterns, accompanied by an unambiguous 16-character offline recovery key for fail-safe credential resets without data loss.
 - **🏎️ Locked 120Hz LTPO Smoothness**: App icons pre-rasterized to 120x120 on `Dispatchers.IO`, Compose `@Immutable` stability contracts, and zero dropped frames (<8.33ms budget) during fast dashboard scrolling.
 - **🪶 Ultra-Lean 3.3 MB Footprint**: Aggressive Google R8 tree-shaking and resource shrinking, achieving a 95% size reduction over unminified builds (DEX compressed to a single 2.47MB payload).
 
@@ -31,9 +31,11 @@
 - **⏱️ Per-App Custom Grace Periods**: Configure individual re-lock timeouts per application (`0s Immediate`, `30s`, `1m`, `5m`) with visual badge chips on the dashboard and a 1-tap reset.
 
 ### 🕵️ Stealth & System Defense
-- **🕵️ Silent Intruder Selfie**: Headless Camera2 front-camera capture triggered after failed PIN attempts, stored securely in private sandboxed storage (`context.filesDir/intruders`).
+- **🕵️ Silent Intruder Selfie**: Headless Camera2 front-camera capture triggered after failed PIN attempts, stored securely with hardware AES-256-GCM encryption in private sandboxed storage (`context.filesDir/intruders`).
 - **🎭 Fake Crash Decoy Mode**: Authentic *"Unfortunately, [App] keeps stopping"* system dialog to deter snooping. Long-press the icon or title to reveal the actual PIN pad.
-- **🔔 Notification Privacy Shield**: Intercepts incoming notifications from locked apps and masks sensitive preview text in the notification shade and lock screen.
+- **🔔 Notification Privacy Shield**: Non-destructive notification masking intercepting incoming notifications from locked apps and masking sensitive preview text in the notification shade and lock screen.
+- **📦 Encrypted Diagnostic Audit Export**: Export an encrypted, sanitized diagnostic audit container (`.pgdiag`) encrypted via PBKDF2 + AES-256-GCM keyed to the user's recovery key for zero-leak troubleshooting.
+- **🌐 Full UI Internationalization (i18n)**: 100% of user-facing UI text, dialogs, button labels, badge strings, and content descriptions externalized into domain-prefixed XML keys in `res/values/strings.xml`.
 - **🏷️ Contextual Category Batch Controls**: 1-tap **[Lock All]** and **[Unlock All]** actions for Financial, Social, Sensitive, and System app bundles.
 - **🔒 Settings & Uninstaller Protection**: Locks access to Android Settings and the Package Installer to prevent unauthorized force-stops or app uninstallation.
 - **🛡️ Android 17 Restricted Settings Guidance**: Built-in interactive onboarding wizard guiding users through Android 17's sideload permission barriers (`Allow restricted settings`).
@@ -50,6 +52,7 @@ app/src/main/java/com/pixelguard/applock/
 ├── data/
 │   ├── local/
 │   │   ├── CryptoManager.kt       # StrongBox / Keystore PBKDF2/SHA-256 PIN hashing
+│   │   ├── DiagnosticExporter.kt  # Encrypted diagnostic audit container (PBKDF2 + AES-256-GCM)
 │   │   └── PreferencesDataStore.kt # Encrypted Jetpack DataStore preferences
 │   ├── model/
 │   │   ├── AppCategory.kt         # Financial, Social, Sensitive, System categories

@@ -18,7 +18,9 @@
     <string name="common_confirm">Confirm</string>
     <string name="common_save">Save</string>
     <string name="common_delete">Delete</string>
+    <string name="common_clear">Clear</string>
     <string name="common_close">Close</string>
+    <string name="common_back">Back</string>
     <string name="common_copied">Copied to clipboard</string>
     <string name="common_active">Active</string>
     <string name="common_disabled">Disabled</string>
@@ -30,39 +32,39 @@
     <!-- =================================================================== -->
     <string name="onboarding_title">Setup Protection</string>
     <string name="onboarding_subtitle">Grant required permissions to enable zero-latency application locking on Pixel 9</string>
-    <string name="onboarding_perm_accessibility_title">Accessibility Service</string>
-    <string name="onboarding_perm_accessibility_desc">Enables instant zero-latency detection when protected apps open.</string>
+    <string name="onboarding_perm_accessibility_title">App Detection</string>
+    <string name="onboarding_perm_accessibility_desc">Allows Pixel Guard to instantly detect and lock your selected apps the moment they open.</string>
     <string name="onboarding_perm_overlay_title">Display Over Other Apps</string>
     <string name="onboarding_perm_overlay_desc">Allows the hardware-accelerated lock screen overlay to render smoothly over target apps.</string>
-    <string name="onboarding_perm_notification_title">Notification Privacy Shield</string>
-    <string name="onboarding_perm_notification_desc">Masks private message previews and notification contents from locked apps.</string>
+    <string name="onboarding_perm_notification_title">Hide Notification Details</string>
+    <string name="onboarding_perm_notification_desc">Keeps private message previews hidden from your notification bar while apps are locked.</string>
     <string name="onboarding_btn_grant_accessibility">Enable Accessibility</string>
     <string name="onboarding_btn_grant_overlay">Grant Overlay</string>
     <string name="onboarding_btn_grant_notification">Enable Shield</string>
-    <string name="onboarding_btn_skip_notification">Skip for now</string>
+    <string name="onboarding_btn_skip_notification">Later</string>
     <string name="onboarding_restricted_hint">Tap \'Open App Info\' ➔ top-right menu (⋮) ➔ \'Allow restricted settings\' if toggles are grayed out.</string>
-    <string name="onboarding_btn_open_app_info">Open App Info</string>
-    <string name="onboarding_step2_title">Create Master Passcode</string>
-    <string name="onboarding_step2_desc">Set a 6-digit master passcode to lock your applications and protect settings.</string>
+    <string name="onboarding_btn_open_app_info">Open App Settings</string>
+    <string name="onboarding_step2_title">Step 2: Create Passcode</string>
+    <string name="onboarding_step2_desc">Use this 6-digit passcode to unlock apps and manage settings</string>
     <string name="onboarding_enter_pin_label">Enter 6-Digit Passcode</string>
     <string name="onboarding_confirm_pin_label">Confirm 6-Digit Passcode</string>
     <string name="onboarding_pin_mismatch">Passcodes do not match</string>
     <string name="onboarding_pin_weak">Passcode is too simple. Avoid repetitive or sequential digits.</string>
-    <string name="onboarding_btn_save_pin">Save Master Passcode</string>
-    <string name="onboarding_recovery_title">Offline Recovery Key</string>
-    <string name="onboarding_recovery_desc">Store this 16-character recovery key safely. If you ever forget your Master Passcode, this is the only way to reset your credentials without losing your device configuration.</string>
+    <string name="onboarding_btn_save_pin">Save Passcode &amp; Finish</string>
+    <string name="onboarding_recovery_title">Save Master Recovery Key</string>
+    <string name="onboarding_recovery_desc">Keep this 16-character recovery key in a safe place. If you forget your passcode or security data is reset, this key is the only way to regain access.</string>
     <string name="onboarding_btn_copy_recovery">Copy Recovery Key</string>
-    <string name="onboarding_btn_confirm_recovery">I Have Saved My Key</string>
+    <string name="onboarding_btn_confirm_recovery">I Have Saved My Recovery Key</string>
 
     <!-- =================================================================== -->
     <!-- 4. Main Dashboard Screen                                            -->
     <!-- =================================================================== -->
-    <string name="main_search_hint">Search installed apps…</string>
+    <string name="main_search_hint">Search apps to protect...</string>
     <string name="main_filter_locked_only">Locked Only (%1$d)</string>
     <string name="main_filter_customized">Customized (%1$d)</string>
     <string name="main_empty_title">No Applications Found</string>
     <string name="main_empty_desc">No applications match your active search query or filter criteria.</string>
-    <string name="main_btn_reset_filters">Reset Filters</string>
+    <string name="main_btn_reset_filters">Reset filters</string>
     <string name="main_batch_lock_all">Lock All</string>
     <string name="main_batch_unlock_all">Unlock All</string>
     <string name="main_category_all">All</string>
@@ -71,8 +73,8 @@
     <string name="main_category_sensitive">Sensitive</string>
     <string name="main_category_system">System</string>
     <string name="main_category_other">Other</string>
-    <string name="main_sort_by">Sort By</string>
-    <string name="main_sort_name_asc">Name (A–Z)</string>
+    <string name="main_sort_by">Sort</string>
+    <string name="main_sort_name_asc">A–Z</string>
     <string name="main_sort_locked_first">Locked First</string>
     <string name="main_sort_category">Category</string>
     <string name="main_status_protected">Protected</string>
@@ -85,39 +87,39 @@
     <string name="settings_title">Settings</string>
     <string name="settings_armor_status">Hardware Armor Active</string>
     <string name="settings_armor_subtitle">Titan M2 &amp; StrongBox Cryptography Armed</string>
-    <string name="settings_section_auth">Authentication &amp; Biometrics</string>
-    <string name="settings_biometrics_title">Biometric Unlock</string>
-    <string name="settings_biometrics_desc">Use Pixel 9 ultrasonic fingerprint or Face Unlock</string>
-    <string name="settings_change_pin_title">Change Master Passcode</string>
-    <string name="settings_change_pin_desc">Update your 6-digit master security passcode</string>
-    <string name="settings_section_privacy">Privacy &amp; Anti-Tamper</string>
-    <string name="settings_protect_settings_title">Protect Android Settings</string>
-    <string name="settings_protect_settings_desc">Requires Master PIN to open Android Settings and Package Installer</string>
-    <string name="settings_protect_playstore_title">Prevent Play Store Tampering</string>
-    <string name="settings_protect_playstore_desc">Locks Google Play Store to prevent uninstallation or sideload modification</string>
-    <string name="settings_recents_masking_title">Recents Screen Masking</string>
-    <string name="settings_recents_masking_desc">Applies FLAG_SECURE to hide screen contents in app overview</string>
-    <string name="settings_decoy_crash_title">Decoy Fake Crash Mode</string>
-    <string name="settings_decoy_crash_desc">Shows a fake \'App keeps stopping\' dialog on launch</string>
-    <string name="settings_intruder_selfie_title">Intruder Selfie Capture</string>
-    <string name="settings_intruder_selfie_desc">Silently captures front-camera photo after repeated failed attempts</string>
+    <string name="settings_section_auth">Sign-In &amp; Passcode</string>
+    <string name="settings_biometrics_title">Fingerprint &amp; Face Unlock</string>
+    <string name="settings_biometrics_desc">Unlock apps instantly using your fingerprint or face</string>
+    <string name="settings_change_pin_title">Change Passcode</string>
+    <string name="settings_change_pin_desc">Update your 6-digit backup passcode</string>
+    <string name="settings_section_privacy">Privacy &amp; Safety</string>
+    <string name="settings_protect_settings_title">Lock Phone Settings</string>
+    <string name="settings_protect_settings_desc">Require passcode to open phone Settings, App Info, or uninstall apps</string>
+    <string name="settings_protect_playstore_title">Lock Google Play Store</string>
+    <string name="settings_protect_playstore_desc">Require passcode before opening Google Play Store to prevent uninstalling apps</string>
+    <string name="settings_recents_masking_title">Hide in App Switcher</string>
+    <string name="settings_recents_masking_desc">Protects Pixel Guard screens and recent previews with hardware FLAG_SECURE</string>
+    <string name="settings_decoy_crash_title">Fake Crash Screen</string>
+    <string name="settings_decoy_crash_desc">Shows a fake \'App has stopped\' alert; hold down the alert to enter your passcode</string>
+    <string name="settings_intruder_selfie_title">Intruder Selfie</string>
+    <string name="settings_intruder_selfie_desc">Silently takes a front-camera photo when someone repeatedly fails verification</string>
     <string name="settings_diagnostic_export_title">Export Diagnostic Audit</string>
     <string name="settings_diagnostic_export_desc">Export an encrypted, sanitized diagnostic audit for troubleshooting</string>
-    <string name="settings_section_display">Tactile &amp; Display</string>
-    <string name="settings_haptics_title">Pixel Haptic Feedback</string>
-    <string name="settings_haptics_desc">Tactile ticks on keypad touches and authentication events</string>
-    <string name="settings_animations_title">Fluid Micro-Animations</string>
-    <string name="settings_animations_desc">Smooth spring physics and keypad transitions</string>
-    <string name="settings_dynamic_theme_title">Dynamic App Theming</string>
-    <string name="settings_dynamic_theme_desc">Adapts lock screen ambient aura to signature colors of locked app</string>
-    <string name="settings_scramble_pin_title">Scramble PIN Keypad</string>
-    <string name="settings_scramble_pin_desc">Randomizes numeric button layout per session to defeat shoulder surfing</string>
-    <string name="settings_section_automation">Automation &amp; Schedules</string>
-    <string name="settings_night_lockdown_title">Night Lockdown Schedule</string>
-    <string name="settings_night_lockdown_desc">Enforces strict 0-second re-lock during specified hours</string>
-    <string name="settings_night_pin_only_title">Require PIN Only at Night</string>
-    <string name="settings_night_pin_only_desc">Disables biometrics during schedule to prevent sleep-unlock attempts</string>
-    <string name="settings_reset_grace_title">Reset All App Grace Overrides</string>
+    <string name="settings_section_display">Look &amp; Feel</string>
+    <string name="settings_haptics_title">Vibration Feedback</string>
+    <string name="settings_haptics_desc">Feel subtle vibration clicks when typing your passcode</string>
+    <string name="settings_animations_title">Smooth Animations</string>
+    <string name="settings_animations_desc">Show fluid motion effects when unlocking</string>
+    <string name="settings_dynamic_theme_title">Match App Colors</string>
+    <string name="settings_dynamic_theme_desc">Tints the lock screen with each app\'s primary color (e.g. green for WhatsApp)</string>
+    <string name="settings_scramble_pin_title">Scramble Keypad</string>
+    <string name="settings_scramble_pin_desc">Randomize number positions on every unlock to prevent people from guessing your passcode</string>
+    <string name="settings_section_automation">Schedules &amp; Timers</string>
+    <string name="settings_night_lockdown_title">Night Schedule</string>
+    <string name="settings_night_lockdown_desc">Lock apps immediately with no delay while you sleep</string>
+    <string name="settings_night_pin_only_title">Require Passcode Only at Night</string>
+    <string name="settings_night_pin_only_desc">Disables fingerprint and face unlock while scheduled so no one can unlock your phone while you are asleep</string>
+    <string name="settings_reset_grace_title">Reset all custom app timers to default</string>
     <string name="settings_reset_grace_desc">Revert all per-app custom timeout settings to global default</string>
 
     <!-- =================================================================== -->
@@ -126,7 +128,7 @@
     <string name="lock_shield_badge">Secured by Pixel Guard</string>
     <string name="lock_subtitle_biometric">Confirm fingerprint or Face Unlock to continue</string>
     <string name="lock_subtitle_pin_only">Enter 6-digit Master Passcode</string>
-    <string name="lock_lockout_banner">Keypad locked for %1$ds due to repeated failed attempts</string>
+    <string name="lock_lockout_banner">Locked out. Try again in %1$ds</string>
     <string name="lock_attempts_warning">%1$d attempts remaining before %2$ds lockout</string>
     <string name="lock_exit_home">Exit to Home</string>
     <string name="lock_decoy_keeps_stopping">%1$s keeps stopping</string>
@@ -136,11 +138,11 @@
     <!-- =================================================================== -->
     <!-- 7. Intruder Logs Screen                                             -->
     <!-- =================================================================== -->
-    <string name="intruders_title">Intruder Break-In Logs</string>
+    <string name="intruders_title">Intruder Selfies</string>
     <string name="intruders_empty_title">No Break-In Attempts</string>
-    <string name="intruders_empty_desc">Your protected applications are secure. Failed unlock attempts will appear here with photos.</string>
-    <string name="intruders_clear_all">Clear All Logs</string>
-    <string name="intruders_clear_confirm_title">Clear All Intruder Logs?</string>
-    <string name="intruders_clear_confirm_desc">All captured intruder selfies and timestamps will be permanently deleted.</string>
+    <string name="intruders_empty_desc">When someone enters an incorrect passcode, their photo will appear here.</string>
+    <string name="intruders_clear_all">Clear All</string>
+    <string name="intruders_clear_confirm_title">Clear All Logs?</string>
+    <string name="intruders_clear_confirm_desc">This will permanently delete all captured intruder photos and records.</string>
     <string name="intruders_clear_confirm_btn">Delete All</string>
 </resources>

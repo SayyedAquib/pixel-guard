@@ -348,7 +348,7 @@ fun MainScreen(
                         trailingIcon = {
                             if (query.isNotEmpty()) {
                                 IconButton(onClick = { viewModel.onSearchQueryChanged("") }) {
-                                    Icon(imageVector = Icons.Default.Close, contentDescription = stringResource(R.string.common_delete))
+                                    Icon(imageVector = Icons.Default.Close, contentDescription = stringResource(R.string.common_clear))
                                 }
                             }
                         },

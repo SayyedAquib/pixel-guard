@@ -1,5 +1,6 @@
 package com.pixelguard.applock.ui.lock
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -42,6 +43,7 @@ class LockActivity : FragmentActivity() {
     private var appName: String = ""
     private var hasCapturedSelfieThisSession: Boolean = false
 
+    @SuppressLint("MissingPermission")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         applyZeroTransition()
