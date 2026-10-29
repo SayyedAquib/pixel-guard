@@ -369,9 +369,30 @@
   10. **M-11, M-14 & Lows**: Added clock-tamper defense in `SessionManager` (300s clamp); sanitized release log statements behind `if (BuildConfig.DEBUG)`; exact colon parsing for permission checks; updated test suites to 164 passing tests (100% pass rate).
 - **Verification**: `.\gradlew.bat testFast` passed in ~15s; `.\gradlew.bat testDebugUnitTest` passed all 164 tests; `.\gradlew.bat assembleRelease` successfully compiled and signed production release APK (3.68MB).
 
+## Session 56 (2026-10-29)
+- **Goal**: Full Production Polish & Sideload Distribution Readiness (addressed audit findings).
+- **Completed**:
+  1. **Encrypted Diagnostic Log Export (TDD)**:
+     - Developed `DiagnosticExporter` and unit tests with TDD red-green-refactor cycle.
+     - Implemented sanitized payload generation: booleans for permissions, preference states, anonymized app counts, and timestamp. Zero package names, credentials, or hashes.
+     - Containerized PBKDF2 (100,000 iterations) + AES-256-GCM encryption (`PGDIAG01`) derived from user's normalized 16-character recovery key.
+     - Added repository and `MainViewModel.exportDiagnostics()` seam.
+     - Added secure `FileProvider` (`res/xml/file_paths.xml`) and Settings UI row with 16-character recovery key prompt and Android `ACTION_SEND` chooser.
+  2. **ProGuard / R8 Hardening**:
+     - Expanded `proguard-rules.pro` with explicit rules preserving Jetpack DataStore, CameraX/Camera2 headless capture components, BiometricPrompt interfaces, and immutable data models.
+  3. **Automated CI/CD Pipeline**:
+     - Created `.github/workflows/android-ci.yml` supporting JDK 17, automated test runs (`testFast`, `testDebugUnitTest`), lint checks, release APK build, and artifact upload.
+  4. **Complete UI Internationalization (i18n)**:
+     - Externalized all hardcoded strings across `MainScreen.kt`, `LockOverlayScreen.kt`, `OnboardingScreen.kt`, `IntruderLogsScreen.kt`, and `SettingsScreen.kt` to domain-prefixed keys in `res/values/strings.xml`.
+     - Verified all UI components reference string resources via `stringResource(R.string...)` with formatted argument support.
+  5. **Architecture & Documentation**:
+     - Logged ADRs 048, 049, and 050 in `docs/DECISIONS.md`.
+     - Updated `docs/MEMORY.md`.
+
 ## Next Steps
-- Per strict user mandate, calculator launcher disguises and fake calculation passcodes are permanently banned across all future development.
-- Optional on-device Compose instrumentation tests (`connectedDebugAndroidTest`) on physical Pixel 9 when device is connected via ADB.
+- Run `.\gradlew.bat assembleRelease` to confirm production release build and R8 optimization.
+- Ephemeral file cleanup (verify zero test dumps or scratch files in workspace root).
+
 
 ## Things to Be Careful About
 - Never run Gradle without setting `$env:JAVA_HOME` and `$env:ANDROID_HOME`.

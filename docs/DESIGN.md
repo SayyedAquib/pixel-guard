@@ -158,6 +158,17 @@ Standard 4dp/8dp grid system:
 - **Spring Shackle Bounce**: Upright shackle rotation (`-14f` to `0f`) and scale pulse on toggle.
 - **24-Hour Circular Schedule Dial**: Interactive circular day/night time visualizer (`Canvas` with `drawArc` and animated sweep angle) in the Night Lockdown sheet, rendering active lockdown hours, duration badge, and start/end time indicators.
 - **Pinch-to-Zoom Evidence Viewer**: Hardware-accelerated multi-touch zoom (`detectTransformGestures` supporting 1x to 3.5x magnification) and two-finger panning in the intruder log photo preview dialog.
+
+### Internationalization & String Token Architecture
+- 100% of user-visible strings, dialog titles, button labels, badge strings, and accessibility content descriptions are externalized into `res/values/strings.xml`.
+- Structured into cohesive functional domains (`common_*`, `onboarding_*`, `main_*`, `settings_*`, `lock_*`, `intruders_*`).
+- Supports formatted positional parameters (e.g. `main_filter_locked_only`, `lock_attempts_warning`, `lock_decoy_keeps_stopping`) ensuring natural translation flow across international locales.
+
+### Diagnostic Audit Export Modal
+- `AlertDialog` prompting for the user's 16-character offline recovery key with monospace formatting.
+- Derives AES-256-GCM encryption key on-device via PBKDF2 without transmitting data to any cloud service.
+- Dispatches encrypted `.pgdiag` payload securely via `androidx.core.content.FileProvider` and standard Android `ACTION_SEND` share sheet.
+
 - **Physics-Based Springs**: `spring(stiffness = Spring.StiffnessMediumLow)` for lock toggles, shackle bounces, and gauge animations.
 - **Biometric Aura**: Infinite pulsing scale (`1f` to `1.18f`) and alpha (`0.2f` to `0.55f`) with `tween(1200, FastOutSlowInEasing)`.
 - **Refresh Rate**: Guaranteed locked 120Hz smooth scrolling without frame skips.

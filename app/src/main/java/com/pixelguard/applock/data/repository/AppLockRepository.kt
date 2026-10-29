@@ -42,5 +42,7 @@ interface AppLockRepository {
     suspend fun deleteUserTag(tag: String)
     suspend fun addTagToApp(packageName: String, tag: String)
     suspend fun removeTagFromApp(packageName: String, tag: String)
+    suspend fun exportEncryptedDiagnostics(recoveryKey: String): java.io.File
 }
+
 

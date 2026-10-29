@@ -514,4 +514,50 @@ class AppLockRepositoryImpl(
         }
         updatePreferences(current.copy(appCustomTagsJson = appTagsObj.toString()))
     }
+
+    override suspend fun exportEncryptedDiagnostics(recoveryKey: String): File = withContext(Dispatchers.IO) {
+        val snapshot = com.pixelguard.applock.data.local.SecuritySnapshotManager.loadSnapshot(context)
+        val packageManager = context.packageManager
+        val pInfo = try {
+            packageManager.getPackageInfo(context.packageName, 0)
+        } catch (_: Exception) {
+            null
+        }
+        val appVersion = pInfo?.versionName ?: "1.0.0"
+        val versionCode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            pInfo?.longVersionCode?.toInt() ?: 1
+        } else {
+            @Suppress("DEPRECATION")
+            pInfo?.versionCode ?: 1
+        }
+        val isLockedOut = com.pixelguard.applock.domain.usecase.SessionManager.isLockedOut(context.packageName)
+        val remainingSec = com.pixelguard.applock.domain.usecase.SessionManager.getRemainingLockoutSeconds(context.packageName)
+        val failedAttempts = com.pixelguard.applock.domain.usecase.SessionManager.getGlobalFailedAttempts()
+        val records = _intruderRecords.value.size
+
+        val exporter = com.pixelguard.applock.data.local.DiagnosticExporter(cryptoManager)
+        val payload = exporter.generateAuditPayload(
+            appVersion = appVersion,
+            versionCode = versionCode,
+            deviceModel = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}",
+            androidVersion = android.os.Build.VERSION.SDK_INT,
+            securityPatch = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                android.os.Build.VERSION.SECURITY_PATCH
+            } else "N/A",
+            isAccessibilityActive = true,
+            isNotificationShieldActive = true,
+            snapshot = snapshot,
+            intruderRecordsCount = records,
+            globalFailedAttempts = failedAttempts,
+            isLockedOut = isLockedOut,
+            remainingLockoutSeconds = remainingSec
+        )
+
+        val encryptedBytes = exporter.encryptAuditPayload(payload, recoveryKey)
+        val exportDir = File(context.cacheDir, "exports").apply { if (!exists()) mkdirs() }
+        val exportFile = File(exportDir, "pixelguard_diagnostic_${System.currentTimeMillis()}.pgdiag")
+        exportFile.writeBytes(encryptedBytes)
+        exportFile
+    }
 }
+

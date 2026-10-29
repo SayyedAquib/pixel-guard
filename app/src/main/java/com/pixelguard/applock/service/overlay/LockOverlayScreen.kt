@@ -77,6 +77,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.pixelguard.applock.R
 import androidx.core.graphics.drawable.toBitmap
 import com.pixelguard.applock.ui.common.HapticManager
 import kotlinx.coroutines.launch
@@ -238,7 +240,7 @@ fun LockOverlayScreen(
                             )
                             Spacer(modifier = Modifier.width(12.dp))
                             Text(
-                                text = "$targetAppName keeps stopping",
+                                text = stringResource(R.string.lock_decoy_keeps_stopping, targetAppName),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
@@ -259,13 +261,13 @@ fun LockOverlayScreen(
                             horizontalArrangement = Arrangement.End
                         ) {
                             TextButton(onClick = onExitToHome) {
-                                Text(text = "Send feedback")
+                                Text(text = stringResource(R.string.lock_decoy_send_feedback))
                             }
                             Spacer(modifier = Modifier.width(8.dp))
                             Button(
                                 onClick = onExitToHome
                             ) {
-                                Text(text = "Close app", fontWeight = FontWeight.Bold)
+                                Text(text = stringResource(R.string.lock_decoy_close_app), fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -393,7 +395,7 @@ fun LockOverlayScreen(
                     Spacer(modifier = Modifier.height(4.dp))
 
                     Text(
-                        text = "Secured by Pixel Guard",
+                        text = stringResource(R.string.lock_shield_badge),
                         style = MaterialTheme.typography.bodySmall,
                         color = brandColor,
                         fontWeight = FontWeight.Medium
@@ -418,7 +420,7 @@ fun LockOverlayScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "Locked out. Try again in ${currentLockout}s",
+                                    text = stringResource(R.string.lock_lockout_banner, currentLockout),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.error,
                                     fontWeight = FontWeight.SemiBold
@@ -456,7 +458,7 @@ fun LockOverlayScreen(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "$attemptsUntilLockout ${if (attemptsUntilLockout == 1) "attempt" else "attempts"} remaining before 30s lockout",
+                                    text = stringResource(R.string.lock_attempts_warning, attemptsUntilLockout, 30),
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.error,
                                     fontWeight = FontWeight.SemiBold
@@ -615,6 +617,7 @@ fun LockOverlayScreen(
                                             label = "del_scale"
                                         )
 
+                                        val deleteDesc = stringResource(R.string.common_delete)
                                         IconButton(
                                             onClick = {
                                                 if (isKeypadDisabled) {
@@ -629,7 +632,7 @@ fun LockOverlayScreen(
                                             enabled = !isKeypadDisabled,
                                             interactionSource = delInteraction,
                                             modifier = Modifier
-                                                .semantics { contentDescription = "Delete" }
+                                                .semantics { contentDescription = deleteDesc }
                                                 .size(72.dp)
                                                 .graphicsLayer {
                                                     scaleX = delScale
@@ -738,7 +741,7 @@ fun LockOverlayScreen(
                     onClick = onExitToHome,
                     modifier = Modifier.padding(bottom = 8.dp)
                 ) {
-                    Text(text = "Exit to Home", color = MaterialTheme.colorScheme.outline)
+                    Text(text = stringResource(R.string.lock_exit_home), color = MaterialTheme.colorScheme.outline)
                 }
             }
         }

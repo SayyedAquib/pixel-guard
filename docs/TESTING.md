@@ -92,6 +92,12 @@ Unit and service tests validate cryptography, rate limiting, background intercep
   - 16-character unambiguous base32 recovery key generation and normalization (H-3).
   - Authenticated storage envelope encryption and decryption with Associated Authenticated Data (AAD: `pin_hash`, `pin_salt`, `recovery_hash`, `recovery_salt`) (M-10).
   - Rejection of unauthenticated or tampered ciphertext envelopes.
+- **`DiagnosticExporterTest`** (5 tests):
+  - Sanitized diagnostic payload generation: verifies all values are non-empty and contains zero package names, credentials, salts, or hashes.
+  - PBKDF2 + AES-256-GCM containerized encryption format (`PGDIAG01`) with salt and IV headers.
+  - Authenticated round-trip decryption using the user's 16-character recovery key.
+  - Recovery key formatting tolerance: verifies decryption succeeds regardless of hyphens, lowercase letters, or whitespace.
+  - Decryption rejection and data integrity: verifies tampered ciphertext or wrong recovery keys are rejected with `IllegalArgumentException`.
 - **`AppLockRepositoryTest`** (9 tests):
   - 6-digit PIN persistence returning formatted 16-character recovery key.
   - Single-snapshot atomic reads for PIN verification preventing TOCTOU race conditions (M-2).

@@ -1,7 +1,10 @@
 package com.pixelguard.applock.ui.settings
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import androidx.compose.ui.res.stringResource
+import com.pixelguard.applock.R
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
@@ -42,6 +45,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.HourglassTop
 import androidx.compose.material.icons.filled.Info
@@ -57,6 +61,7 @@ import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -120,6 +125,10 @@ fun SettingsScreen(
     var showGracePeriodSheet by remember { mutableStateOf(false) }
     var showScheduleSheet by remember { mutableStateOf(false) }
     var showQuickTilePauseSheet by remember { mutableStateOf(false) }
+    var showDiagnosticExportDialog by remember { mutableStateOf(false) }
+    var diagnosticRecoveryInput by remember { mutableStateOf("") }
+    var diagnosticExportError by remember { mutableStateOf<String?>(null) }
+    var isExportingDiagnostic by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -276,14 +285,14 @@ fun SettingsScreen(
             // 2. Card 1: Sign-In & Passcode
             SettingsCard {
                 SettingsCategoryHeader(
-                    title = "Sign-In & Passcode",
+                    title = stringResource(R.string.settings_section_auth),
                     icon = Icons.Default.Fingerprint,
                     badgeText = "Secured"
                 )
 
                 SettingsSwitchRow(
-                    title = "Fingerprint & Face Unlock",
-                    subtitle = "Unlock apps instantly using your fingerprint or face",
+                    title = stringResource(R.string.settings_biometrics_title),
+                    subtitle = stringResource(R.string.settings_biometrics_desc),
                     icon = Icons.Default.Fingerprint,
                     checked = prefs.isBiometricsEnabled,
                     onCheckedChange = { viewModel.updatePreferences(prefs.copy(isBiometricsEnabled = it)) }
@@ -295,8 +304,8 @@ fun SettingsScreen(
                 )
 
                 SettingsActionRow(
-                    title = "Change Passcode",
-                    subtitle = "Update your 6-digit backup passcode",
+                    title = stringResource(R.string.settings_change_pin_title),
+                    subtitle = stringResource(R.string.settings_change_pin_desc),
                     icon = Icons.Default.Key,
                     onClick = { showChangePinSheet = true }
                 )
@@ -307,8 +316,8 @@ fun SettingsScreen(
                 )
 
                 SettingsSwitchRow(
-                    title = "Scramble Keypad",
-                    subtitle = "Randomize number positions on every unlock to prevent people from guessing your passcode",
+                    title = stringResource(R.string.settings_scramble_pin_title),
+                    subtitle = stringResource(R.string.settings_scramble_pin_desc),
                     icon = Icons.Default.Shield,
                     checked = prefs.isScramblePinEnabled,
                     onCheckedChange = { viewModel.updatePreferences(prefs.copy(isScramblePinEnabled = it)) }
@@ -318,14 +327,14 @@ fun SettingsScreen(
             // 3. Card 2: Privacy & Safety
             SettingsCard {
                 SettingsCategoryHeader(
-                    title = "Privacy & Safety",
+                    title = stringResource(R.string.settings_section_privacy),
                     icon = Icons.Default.Shield,
                     badgeText = "Extra Security"
                 )
 
                 SettingsSwitchRow(
-                    title = "Hide in App Switcher",
-                    subtitle = "Protects Pixel Guard screens and recent previews with hardware FLAG_SECURE",
+                    title = stringResource(R.string.settings_recents_masking_title),
+                    subtitle = stringResource(R.string.settings_recents_masking_desc),
                     icon = Icons.Default.VisibilityOff,
                     checked = prefs.isRecentsMaskingEnabled,
                     onCheckedChange = { viewModel.updatePreferences(prefs.copy(isRecentsMaskingEnabled = it)) }
@@ -350,8 +359,8 @@ fun SettingsScreen(
                 )
 
                 SettingsSwitchRow(
-                    title = "Intruder Selfie",
-                    subtitle = "Silently takes a front-camera photo when someone repeatedly fails verification",
+                    title = stringResource(R.string.settings_intruder_selfie_title),
+                    subtitle = stringResource(R.string.settings_intruder_selfie_desc),
                     icon = Icons.Default.CameraAlt,
                     checked = prefs.isIntruderSelfieEnabled,
                     onCheckedChange = { enabled ->
@@ -373,8 +382,8 @@ fun SettingsScreen(
                 )
 
                 SettingsSwitchRow(
-                    title = "Lock Phone Settings",
-                    subtitle = "Require passcode to open phone Settings, App Info, or uninstall apps",
+                    title = stringResource(R.string.settings_protect_settings_title),
+                    subtitle = stringResource(R.string.settings_protect_settings_desc),
                     icon = Icons.Default.Security,
                     checked = prefs.isSettingsProtected,
                     onCheckedChange = { viewModel.updatePreferences(prefs.copy(isSettingsProtected = it)) }
@@ -386,8 +395,8 @@ fun SettingsScreen(
                 )
 
                 SettingsSwitchRow(
-                    title = "Lock Google Play Store",
-                    subtitle = "Require passcode before opening Google Play Store to prevent uninstalling apps",
+                    title = stringResource(R.string.settings_protect_playstore_title),
+                    subtitle = stringResource(R.string.settings_protect_playstore_desc),
                     icon = Icons.Default.Shield,
                     checked = prefs.isPlayStoreProtected,
                     onCheckedChange = { viewModel.updatePreferences(prefs.copy(isPlayStoreProtected = it)) }
@@ -399,25 +408,37 @@ fun SettingsScreen(
                 )
 
                 SettingsSwitchRow(
-                    title = "Fake Crash Screen",
-                    subtitle = "Shows a fake 'App has stopped' alert; hold down the alert to enter your passcode",
+                    title = stringResource(R.string.settings_decoy_crash_title),
+                    subtitle = stringResource(R.string.settings_decoy_crash_desc),
                     icon = Icons.Default.VisibilityOff,
                     checked = prefs.isDecoyCrashEnabled,
                     onCheckedChange = { viewModel.updatePreferences(prefs.copy(isDecoyCrashEnabled = it)) }
+                )
+
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 12.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                )
+
+                SettingsActionRow(
+                    title = stringResource(R.string.settings_diagnostic_export_title),
+                    subtitle = stringResource(R.string.settings_diagnostic_export_desc),
+                    icon = Icons.Default.Description,
+                    onClick = { showDiagnosticExportDialog = true }
                 )
             }
 
             // 4. Card 3: Look & Feel
             SettingsCard {
                 SettingsCategoryHeader(
-                    title = "Look & Feel",
+                    title = stringResource(R.string.settings_section_display),
                     icon = Icons.Default.Palette,
                     badgeText = "Personalize"
                 )
 
                 SettingsSwitchRow(
-                    title = "Match App Colors",
-                    subtitle = "Tints the lock screen with each app's primary color (e.g. green for WhatsApp)",
+                    title = stringResource(R.string.settings_dynamic_theme_title),
+                    subtitle = stringResource(R.string.settings_dynamic_theme_desc),
                     icon = Icons.Default.Palette,
                     checked = prefs.isDynamicAppThemingEnabled,
                     onCheckedChange = { viewModel.updatePreferences(prefs.copy(isDynamicAppThemingEnabled = it)) }
@@ -429,8 +450,8 @@ fun SettingsScreen(
                 )
 
                 SettingsSwitchRow(
-                    title = "Vibration Feedback",
-                    subtitle = "Feel subtle vibration clicks when typing your passcode",
+                    title = stringResource(R.string.settings_haptics_title),
+                    subtitle = stringResource(R.string.settings_haptics_desc),
                     icon = Icons.Default.Vibration,
                     checked = prefs.isHapticsEnabled,
                     onCheckedChange = { viewModel.updatePreferences(prefs.copy(isHapticsEnabled = it)) }
@@ -442,8 +463,8 @@ fun SettingsScreen(
                 )
 
                 SettingsSwitchRow(
-                    title = "Smooth Animations",
-                    subtitle = "Show fluid motion effects when unlocking",
+                    title = stringResource(R.string.settings_animations_title),
+                    subtitle = stringResource(R.string.settings_animations_desc),
                     icon = Icons.Default.MotionPhotosOn,
                     checked = prefs.isAnimationsEnabled,
                     onCheckedChange = { viewModel.updatePreferences(prefs.copy(isAnimationsEnabled = it)) }
@@ -453,7 +474,7 @@ fun SettingsScreen(
             // 5. Card 4: Schedules & Timers
             SettingsCard {
                 SettingsCategoryHeader(
-                    title = "Schedules & Timers",
+                    title = stringResource(R.string.settings_section_automation),
                     icon = Icons.Default.Timer,
                     badgeText = "Automations"
                 )
@@ -481,8 +502,8 @@ fun SettingsScreen(
                 )
 
                 SettingsSwitchRow(
-                    title = "Night Schedule",
-                    subtitle = "Lock apps immediately with no delay while you sleep",
+                    title = stringResource(R.string.settings_night_lockdown_title),
+                    subtitle = stringResource(R.string.settings_night_lockdown_desc),
                     icon = Icons.Default.Bedtime,
                     checked = prefs.isScheduleEnabled,
                     onCheckedChange = { viewModel.updatePreferences(prefs.copy(isScheduleEnabled = it)) }
@@ -514,12 +535,12 @@ fun SettingsScreen(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Require Passcode Only at Night",
+                                text = stringResource(R.string.settings_night_pin_only_title),
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium
                             )
                             Text(
-                                text = "Disables fingerprint and face unlock while scheduled so no one can unlock your phone while you are asleep",
+                                text = stringResource(R.string.settings_night_pin_only_desc),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -595,7 +616,7 @@ fun SettingsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Reset all custom app timers to default",
+                            text = stringResource(R.string.settings_reset_grace_title),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.error,
                             fontWeight = FontWeight.SemiBold
@@ -693,6 +714,96 @@ fun SettingsScreen(
                 }
             )
         }
+    }
+
+    if (showDiagnosticExportDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showDiagnosticExportDialog = false
+                diagnosticRecoveryInput = ""
+                diagnosticExportError = null
+            },
+            title = {
+                Text(
+                    text = stringResource(R.string.settings_diagnostic_export_title),
+                    style = MaterialTheme.typography.titleLarge
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Enter your 16-character recovery key to encrypt the diagnostic audit archive. The file is protected with AES-256-GCM so only you can decrypt it offline.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    OutlinedTextField(
+                        value = diagnosticRecoveryInput,
+                        onValueChange = {
+                            diagnosticRecoveryInput = it
+                            diagnosticExportError = null
+                        },
+                        label = { Text("16-Character Recovery Key") },
+                        placeholder = { Text("XXXX-XXXX-XXXX-XXXX") },
+                        singleLine = true,
+                        isError = diagnosticExportError != null,
+                        supportingText = {
+                            if (diagnosticExportError != null) {
+                                Text(
+                                    text = diagnosticExportError ?: "",
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val norm = com.pixelguard.applock.data.local.CryptoManager.normalizeRecoveryCode(diagnosticRecoveryInput)
+                        if (norm.length != 16) {
+                            diagnosticExportError = "Valid 16-character recovery key required"
+                            return@Button
+                        }
+                        isExportingDiagnostic = true
+                        viewModel.exportDiagnostics(diagnosticRecoveryInput) { exportFile ->
+                            isExportingDiagnostic = false
+                            showDiagnosticExportDialog = false
+                            diagnosticRecoveryInput = ""
+                            try {
+                                val uri = androidx.core.content.FileProvider.getUriForFile(
+                                    context,
+                                    "${context.packageName}.fileprovider",
+                                    exportFile
+                                )
+                                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "application/octet-stream"
+                                    putExtra(Intent.EXTRA_STREAM, uri)
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                context.startActivity(Intent.createChooser(shareIntent, "Share Diagnostic Audit Archive"))
+                            } catch (_: Exception) {}
+                        }
+                    },
+                    enabled = !isExportingDiagnostic && diagnosticRecoveryInput.isNotBlank()
+                ) {
+                    Text("Export & Share")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showDiagnosticExportDialog = false
+                        diagnosticRecoveryInput = ""
+                        diagnosticExportError = null
+                    }
+                ) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            }
+        )
     }
 }
 

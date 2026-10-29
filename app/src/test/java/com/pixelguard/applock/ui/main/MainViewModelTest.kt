@@ -531,4 +531,17 @@ class MainViewModelTest {
             cancelAndIgnoreRemainingEvents()
         }
     }
+
+    @Test
+    fun exportDiagnostics_callsRepositoryAndReturnsExportFile() = runTest {
+        var exportedFile: java.io.File? = null
+        viewModel.exportDiagnostics("ABCD-EFGH-JKLM-NPQR") { file ->
+            exportedFile = file
+        }
+        advanceUntilIdle()
+
+        assertThat(exportedFile).isNotNull()
+        assertThat(exportedFile?.name).endsWith(".pgdiag")
+        assertThat(exportedFile?.readText()).isEqualTo("fake_encrypted_payload")
+    }
 }

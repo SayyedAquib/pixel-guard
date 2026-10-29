@@ -274,6 +274,14 @@ class MainViewModel(
         }
     }
 
+    fun exportDiagnostics(recoveryKey: String, onResult: (java.io.File) -> Unit) {
+        viewModelScope.launch {
+            val file = repository.exportEncryptedDiagnostics(recoveryKey)
+            onResult(file)
+        }
+    }
+
+
     fun updatePreferences(newPrefs: LockPreferences) {
         viewModelScope.launch {
             repository.updatePreferences(newPrefs)

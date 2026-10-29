@@ -128,6 +128,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.pixelguard.applock.R
 import androidx.core.graphics.drawable.toBitmap
 import com.pixelguard.applock.data.model.AppCategory
 import com.pixelguard.applock.data.model.AppItem
@@ -198,7 +200,7 @@ fun MainScreen(
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
                             Text(
-                                text = "Pixel Guard",
+                                text = stringResource(R.string.app_name),
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 20.sp
                             )
@@ -223,7 +225,7 @@ fun MainScreen(
                         IconButton(onClick = onNavigateToIntruders) {
                             Icon(
                                 imageVector = Icons.Default.Shield,
-                                contentDescription = "Intruder Selfies"
+                                contentDescription = stringResource(R.string.intruders_title)
                             )
                         }
                     }
@@ -231,7 +233,7 @@ fun MainScreen(
                     IconButton(onClick = onNavigateToSettings) {
                         Icon(
                             imageVector = Icons.Default.Settings,
-                            contentDescription = "Settings"
+                            contentDescription = stringResource(R.string.settings_title)
                         )
                     }
                 },
@@ -333,7 +335,7 @@ fun MainScreen(
                         modifier = Modifier.weight(1f),
                         placeholder = {
                             Text(
-                                text = "Search apps to protect...",
+                                text = stringResource(R.string.main_search_hint),
                                 maxLines = 1,
                                 softWrap = false,
                                 overflow = TextOverflow.Ellipsis,
@@ -346,7 +348,7 @@ fun MainScreen(
                         trailingIcon = {
                             if (query.isNotEmpty()) {
                                 IconButton(onClick = { viewModel.onSearchQueryChanged("") }) {
-                                    Icon(imageVector = Icons.Default.Close, contentDescription = "Clear")
+                                    Icon(imageVector = Icons.Default.Close, contentDescription = stringResource(R.string.common_delete))
                                 }
                             }
                         },
@@ -360,9 +362,9 @@ fun MainScreen(
                     // Sort By Dropdown Menu
                     Box {
                         val sortLabel = when (prefs.appSortOrder) {
-                            AppSortOrder.NAME_ASC -> "A–Z"
-                            AppSortOrder.LOCKED_FIRST -> "Locked First"
-                            AppSortOrder.CATEGORY -> "Category"
+                            AppSortOrder.NAME_ASC -> stringResource(R.string.main_sort_name_asc)
+                            AppSortOrder.LOCKED_FIRST -> stringResource(R.string.main_sort_locked_first)
+                            AppSortOrder.CATEGORY -> stringResource(R.string.main_sort_category)
                         }
 
                         AssistChip(
@@ -372,7 +374,7 @@ fun MainScreen(
                             },
                             label = {
                                 Text(
-                                    text = "Sort: $sortLabel",
+                                    text = "${stringResource(R.string.main_sort_by)}: $sortLabel",
                                     style = MaterialTheme.typography.labelMedium
                                 )
                             },
@@ -391,7 +393,7 @@ fun MainScreen(
                             onDismissRequest = { sortMenuExpanded = false }
                         ) {
                             DropdownMenuItem(
-                                text = { Text("Name (A–Z)") },
+                                text = { Text(stringResource(R.string.main_sort_name_asc)) },
                                 leadingIcon = {
                                     if (prefs.appSortOrder == AppSortOrder.NAME_ASC) {
                                         Icon(
@@ -411,7 +413,7 @@ fun MainScreen(
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text("Locked First") },
+                                text = { Text(stringResource(R.string.main_sort_locked_first)) },
                                 leadingIcon = {
                                     if (prefs.appSortOrder == AppSortOrder.LOCKED_FIRST) {
                                         Icon(
@@ -431,7 +433,7 @@ fun MainScreen(
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text("Category") },
+                                text = { Text(stringResource(R.string.main_sort_category)) },
                                 leadingIcon = {
                                     if (prefs.appSortOrder == AppSortOrder.CATEGORY) {
                                         Icon(
@@ -471,7 +473,7 @@ fun MainScreen(
                             },
                             label = {
                                 Text(
-                                    text = "Locked Only ($lockedCount)",
+                                    text = stringResource(R.string.main_filter_locked_only, lockedCount),
                                     fontWeight = if (isOnlyLocked) FontWeight.Bold else FontWeight.Medium
                                 )
                             },
@@ -494,7 +496,7 @@ fun MainScreen(
                             },
                             label = {
                                 Text(
-                                    text = "Customized ($customizedCount)",
+                                    text = stringResource(R.string.main_filter_customized, customizedCount),
                                     fontWeight = if (isOnlyCustomized) FontWeight.Bold else FontWeight.Medium
                                 )
                             },
@@ -655,7 +657,7 @@ fun MainScreen(
                                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
                                     ) {
                                         Text(
-                                            text = "Lock All",
+                                            text = stringResource(R.string.main_batch_lock_all),
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.Bold
                                         )
@@ -671,7 +673,7 @@ fun MainScreen(
                                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
                                     ) {
                                         Text(
-                                            text = "Unlock All",
+                                            text = stringResource(R.string.main_batch_unlock_all),
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.SemiBold
                                         )
@@ -738,7 +740,7 @@ fun MainScreen(
                                         shape = RoundedCornerShape(10.dp),
                                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
                                     ) {
-                                        Text(text = "Lock All", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                        Text(text = stringResource(R.string.main_batch_lock_all), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                     }
                                 }
                                 if (lockedInTag > 0) {
@@ -750,7 +752,7 @@ fun MainScreen(
                                         shape = RoundedCornerShape(10.dp),
                                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
                                     ) {
-                                        Text(text = "Unlock All", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                        Text(text = stringResource(R.string.main_batch_unlock_all), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                                     }
                                 }
                                 IconButton(

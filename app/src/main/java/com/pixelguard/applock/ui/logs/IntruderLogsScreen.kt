@@ -62,6 +62,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.pixelguard.applock.R
 import com.pixelguard.applock.data.model.IntruderRecord
 import com.pixelguard.applock.ui.main.MainViewModel
 import java.io.File
@@ -82,16 +84,16 @@ fun IntruderLogsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(text = "Intruder Selfies", fontWeight = FontWeight.Bold) },
+                title = { Text(text = stringResource(R.string.intruders_title), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_close))
                     }
                 },
                 actions = {
                     if (intruders.isNotEmpty()) {
                         IconButton(onClick = { showClearAllConfirm = true }) {
-                            Icon(imageVector = Icons.Default.DeleteSweep, contentDescription = "Clear All")
+                            Icon(imageVector = Icons.Default.DeleteSweep, contentDescription = stringResource(R.string.intruders_clear_all))
                         }
                     }
                 },
@@ -125,13 +127,13 @@ fun IntruderLogsScreen(
                     }
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        text = "No Break-In Attempts",
+                        text = stringResource(R.string.intruders_empty_title),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "When someone enters an incorrect passcode, their photo will appear here.",
+                        text = stringResource(R.string.intruders_empty_desc),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -284,7 +286,7 @@ fun IntruderLogsScreen(
             },
             confirmButton = {
                 Button(onClick = { selectedRecordForPreview = null }) {
-                    Text("Close")
+                    Text(stringResource(R.string.common_close))
                 }
             }
         )
@@ -294,8 +296,8 @@ fun IntruderLogsScreen(
     if (showClearAllConfirm) {
         AlertDialog(
             onDismissRequest = { showClearAllConfirm = false },
-            title = { Text("Clear All Logs?") },
-            text = { Text("This will permanently delete all captured intruder photos and records.") },
+            title = { Text(stringResource(R.string.intruders_clear_confirm_title)) },
+            text = { Text(stringResource(R.string.intruders_clear_confirm_desc)) },
             confirmButton = {
                 Button(
                     onClick = {
@@ -303,12 +305,12 @@ fun IntruderLogsScreen(
                         showClearAllConfirm = false
                     }
                 ) {
-                    Text("Delete All")
+                    Text(stringResource(R.string.intruders_clear_confirm_btn))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showClearAllConfirm = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.common_cancel))
                 }
             }
         )
@@ -376,7 +378,7 @@ fun IntruderRecordCard(
             IconButton(onClick = onDelete) {
                 Icon(
                     imageVector = Icons.Default.Delete,
-                    contentDescription = "Delete",
+                    contentDescription = stringResource(R.string.common_delete),
                     tint = MaterialTheme.colorScheme.error
                 )
             }

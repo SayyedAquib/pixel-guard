@@ -229,4 +229,10 @@ class FakeAppLockRepository(
         }
         _preferences.value = current.copy(appCustomTagsJson = appTagsObj.toString())
     }
+
+    override suspend fun exportEncryptedDiagnostics(recoveryKey: String): java.io.File {
+        val temp = java.io.File.createTempFile("diag_test", ".pgdiag")
+        temp.writeText("fake_encrypted_payload")
+        return temp
+    }
 }

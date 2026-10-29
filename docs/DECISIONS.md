@@ -1458,6 +1458,59 @@ Preferences were stored without envelope authentication, and fallback allowed un
 - Prevents ciphertext tampering and transposition attacks.
 - Adheres to Android least-privilege standards and ensures Google Play Policy compliance.
 
+---
+
+## ADR 048: Encrypted Diagnostic Log Export (PBKDF2 + AES-256-GCM Container)
+### Date
+2026-10-29
+### Status
+Accepted
+### Context
+Diagnosing issues in production environments (e.g. accessibility unbinding, service restart policies, permission grants) requires telemetry, but Pixel Guard is a zero-telemetry, zero-cloud security application. Exporting diagnostics in plaintext risks leaking installed package names, PIN hashes, or device metadata.
+### Options Considered
+1. Direct plaintext JSON or logcat sharing.
+2. Device AndroidKeyStore encryption (unshareable across devices for remote developer diagnosis).
+3. Containerized PBKDF2 + AES-256-GCM authenticated encryption derived from the user's 16-character offline recovery key with strict payload sanitization.
+### Decision
+Adopt containerized PBKDF2 (100,000 iterations) + AES-256-GCM envelope format (`PGDIAG01`) keyed to the user's normalized 16-character recovery key.
+### Reasoning
+Deriving the encryption key from the recovery key ensures only the user (or support engineer with explicit user authorization) can decrypt the diagnostic package (`.pgdiag`). Zero package names, credentials, or personal identifiers are stored in the payload (only boolean permission states, preference states, anonymized app counts, and timestamp).
+### Consequences
+- Provides a secure, zero-cloud diagnostic mechanism.
+- Safe to share via Android `ACTION_SEND` chooser without exposing private application lists.
+
+---
+
+## ADR 049: Complete UI Internationalization (i18n) & Resource Externalization
+### Date
+2026-10-29
+### Status
+Accepted
+### Context
+Hardcoded strings throughout Composables in `MainScreen`, `LockOverlayScreen`, `OnboardingScreen`, `IntruderLogsScreen`, and `SettingsScreen` impaired maintainability, prevented localization, and violated Android production standards.
+### Decision
+Externalized all user-facing UI text, dialogs, button labels, badge strings, and content descriptions to domain-prefixed XML keys in `res/values/strings.xml` and referenced them via `stringResource(R.string...)`.
+### Consequences
+- Enables full internationalization and multi-language translation support.
+- Centralizes text governance and ensures consistent terminology across app modules.
+
+---
+
+## ADR 050: Production ProGuard/R8 Hardening & Automated GitHub Actions CI Pipeline
+### Date
+2026-10-29
+### Status
+Accepted
+### Context
+Production builds require reliable R8 shrinking without stripping reflective DataStore serializers, CameraX internal components, or biometric callbacks. Furthermore, continuous integration was needed to guard against regressions.
+### Decision
+1. Hardened `proguard-rules.pro` to explicitly preserve Jetpack DataStore models, CameraX/Camera2 headless classes, BiometricPrompt interfaces, and immutable UI models (`AppItem`, `LockPreferences`).
+2. Established `.github/workflows/android-ci.yml` running JDK 17, executing fast and full unit test suites, validating linting, and compiling production release artifacts with upload.
+### Consequences
+- Protects runtime reflection and crypto serialization from obfuscation bugs while retaining a tiny ~3.3MB APK footprint.
+- Guarantees automated quality gates and release reproducibility on every commit and PR.
+
+
 
 
 

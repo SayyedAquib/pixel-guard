@@ -83,6 +83,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.pixelguard.applock.R
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -217,7 +219,7 @@ fun OnboardingScreen(
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "If the setting is greyed out with 'Restricted setting', tap 'Open App Settings' below, tap the 3 dots (⋮) in the top corner, and choose 'Allow restricted settings'.",
+                                text = stringResource(R.string.onboarding_restricted_hint),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 lineHeight = 18.sp
@@ -228,7 +230,7 @@ fun OnboardingScreen(
                                 shape = RoundedCornerShape(8.dp),
                                 contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                             ) {
-                                Text(text = "Open App Settings", fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                                Text(text = stringResource(R.string.onboarding_btn_open_app_info), fontSize = 12.sp, fontWeight = FontWeight.Medium)
                             }
                         }
                     }
@@ -241,8 +243,8 @@ fun OnboardingScreen(
 
             // 1. Accessibility Service (Required)
             PermissionCard(
-                title = "App Detection",
-                description = "Allows Pixel Guard to instantly detect and lock your selected apps the moment they open.",
+                title = stringResource(R.string.onboarding_perm_accessibility_title),
+                description = stringResource(R.string.onboarding_perm_accessibility_desc),
                 isRequired = true,
                 isGranted = permissionStatus.hasAccessibilityPermission,
                 icon = Icons.Default.Accessibility,
@@ -253,8 +255,8 @@ fun OnboardingScreen(
 
             // 3. Notification Privacy Shield (Optional)
             PermissionCard(
-                title = "Hide Notification Details",
-                description = "Keeps private message previews hidden from your notification bar while apps are locked.",
+                title = stringResource(R.string.onboarding_perm_notification_title),
+                description = stringResource(R.string.onboarding_perm_notification_desc),
                 isRequired = false,
                 isGranted = permissionStatus.hasNotificationPermission,
                 isSkipped = isNotificationSkipped,
@@ -305,12 +307,12 @@ fun OnboardingScreen(
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
                                 Text(
-                                    text = "Step 2: Create Passcode",
+                                    text = stringResource(R.string.onboarding_step2_title),
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    text = "Use this 6-digit passcode to unlock apps and manage settings",
+                                    text = stringResource(R.string.onboarding_step2_desc),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -324,11 +326,11 @@ fun OnboardingScreen(
                         fun submitPin() {
                             focusManager.clearFocus()
                             if (newPin.length != MASTER_PIN_LENGTH) {
-                                pinError = "Passcode must be exactly 6 digits"
+                                pinError = context.getString(R.string.onboarding_pin_weak)
                             } else if (CryptoManager.isWeakPin(newPin)) {
-                                pinError = "Passcode is too simple. Avoid repetitive or sequential digits."
+                                pinError = context.getString(R.string.onboarding_pin_weak)
                             } else if (newPin != confirmPin) {
-                                pinError = "Passcodes do not match"
+                                pinError = context.getString(R.string.onboarding_pin_mismatch)
                             } else {
                                 viewModel.setMasterPin(newPin) { recoveryCode ->
                                     generatedRecoveryCode = recoveryCode
@@ -344,7 +346,7 @@ fun OnboardingScreen(
                                     pinError = null
                                 }
                             },
-                            label = { Text("Enter 6-Digit Passcode") },
+                            label = { Text(stringResource(R.string.onboarding_enter_pin_label)) },
                             visualTransformation = PasswordVisualTransformation(),
                             keyboardOptions = KeyboardOptions(
                                 keyboardType = KeyboardType.NumberPassword,
@@ -368,7 +370,7 @@ fun OnboardingScreen(
                                     pinError = null
                                 }
                             },
-                            label = { Text("Confirm 6-Digit Passcode") },
+                            label = { Text(stringResource(R.string.onboarding_confirm_pin_label)) },
                             visualTransformation = PasswordVisualTransformation(),
                             keyboardOptions = KeyboardOptions(
                                 keyboardType = KeyboardType.NumberPassword,
@@ -402,7 +404,7 @@ fun OnboardingScreen(
                             enabled = newPin.length == MASTER_PIN_LENGTH && confirmPin.length == MASTER_PIN_LENGTH
                         ) {
                             Text(
-                                text = "Save Passcode & Finish",
+                                text = stringResource(R.string.onboarding_btn_save_pin),
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 15.sp
                             )
@@ -471,7 +473,7 @@ fun OnboardingScreen(
             },
             title = {
                 Text(
-                    text = "Save Master Recovery Key",
+                    text = stringResource(R.string.onboarding_recovery_title),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center
@@ -483,7 +485,7 @@ fun OnboardingScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "Keep this 16-character recovery key in a safe place. If you forget your passcode or security data is reset, this key is the only way to regain access.",
+                        text = stringResource(R.string.onboarding_recovery_desc),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center
@@ -512,7 +514,7 @@ fun OnboardingScreen(
                         onClick = {
                             clipboardManager.setText(AnnotatedString(recoveryCode))
                             isCopied = true
-                            Toast.makeText(context, "Recovery key copied to clipboard", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, context.getString(R.string.common_copied), Toast.LENGTH_SHORT).show()
                         },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(10.dp)
@@ -523,7 +525,7 @@ fun OnboardingScreen(
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(text = if (isCopied) "Copied to Clipboard!" else "Copy Recovery Key")
+                        Text(text = if (isCopied) stringResource(R.string.common_copied) else stringResource(R.string.onboarding_btn_copy_recovery))
                     }
                 }
             },
@@ -536,7 +538,7 @@ fun OnboardingScreen(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(10.dp)
                 ) {
-                    Text(text = "I Have Saved My Recovery Key", fontWeight = FontWeight.Bold)
+                    Text(text = stringResource(R.string.onboarding_btn_confirm_recovery), fontWeight = FontWeight.Bold)
                 }
             }
         )
@@ -619,7 +621,7 @@ fun PermissionCard(
                             shape = RoundedCornerShape(6.dp)
                         ) {
                             Text(
-                                text = if (isRequired) "Required" else "Optional",
+                                text = if (isRequired) stringResource(R.string.common_required) else stringResource(R.string.common_optional),
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
@@ -645,12 +647,12 @@ fun PermissionCard(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.CheckCircle,
-                                contentDescription = "Active",
+                                contentDescription = stringResource(R.string.common_active),
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(16.dp)
                             )
                             Text(
-                                text = "Active",
+                                text = stringResource(R.string.common_active),
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary
@@ -687,7 +689,7 @@ fun PermissionCard(
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
                         ) {
                             Text(
-                                text = "Later",
+                                text = stringResource(R.string.onboarding_btn_skip_notification),
                                 fontSize = 13.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
