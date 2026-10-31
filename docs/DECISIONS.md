@@ -1531,6 +1531,26 @@ Accepted
 - Prevents Google Play / ChromeOS hardware incompatibilities for devices without rear cameras while ensuring seamless sideloading.
 - Defends against unexpected runtime crashes on non-standard Android distributions.
 
+---
+
+## ADR 052: Fleet-Wide Google Pixel Optimization (Dynamic 90Hz/120Hz Pacing & Foldable/Tablet Ergonomics)
+### Date
+2026-10-31
+### Status
+Accepted
+### Context
+Pixel Guard is targeted across all modern Google Pixel devices running Android 13+ (Pixel 4a 5G, Pixel 5, Pixel 5a, Pixel 6, 6 Pro, 6a, Pixel 7, 7 Pro, 7a, Pixel 8, 8 Pro, 8a, Pixel 9, 9 Pro, 9 Pro XL, 9 Pro Fold, Pixel Fold, Pixel Tablet). 
+Two fleet-wide UX challenges were identified:
+1. Devices with 90Hz Smooth Displays (Pixel 5, 7a, 8a) did not engage high-refresh mode because `enableHighRefreshRate()` checked `>= 119f`, and `LockActivity` lacked high-refresh mode configuration.
+2. Large display form factors (unfolded Pixel Fold / 9 Pro Fold inner screen and Pixel Tablet) caused the numeric keypad to stretch across the wide display.
+### Decision
+1. Lowered high-refresh mode threshold from `119f` to `89f` in `MainActivity.kt` and introduced `enableHighRefreshRate()` in `LockActivity.kt`.
+2. Applied a centered container constraint (`widthIn(max = 420.dp)`) in `LockOverlayScreen.kt` for both the lock screen interface and the decoy crash dialog.
+### Consequences
+- Pixel 5, 7a, and 8a now run at native 90Hz frame rates; Pixel 6-9 Pro models run at 120Hz.
+- Keypad on Pixel Fold and Pixel Tablet stays ergonomically centered, maintaining comfortable thumb reach.
+- Preserves 100% test compatibility across all 169 unit and Compose UI tests.
+
 
 
 

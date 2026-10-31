@@ -394,6 +394,19 @@
      - Logged ADRs 048, 049, 050, and 051 in `docs/DECISIONS.md`.
      - Updated `docs/MEMORY.md`, `README.md`, and test documentation.
 
+## Session 57 (2026-10-31)
+- **Goal**: Fleet-Wide Google Pixel Optimization across all Android 13+ devices (Pixel 4a 5G, 5, 5a, 6, 7, 8, 9, Pixel Fold, Pixel Tablet).
+- **Completed**:
+  1. **Dynamic High-Refresh Rate Mode (90Hz / 120Hz)**:
+     - Updated `enableHighRefreshRate()` in `MainActivity.kt` with a lower threshold (`>= 89f`), enabling 90Hz Smooth Display on Pixel 5, 7a, and 8a while retaining 120Hz on flagship Pro models.
+     - Added `enableHighRefreshRate()` to `LockActivity.kt` so the lock overlay runs at the device's peak native refresh rate.
+  2. **Large-Screen & Foldable Ergonomics**:
+     - Applied centered container constraints (`widthIn(max = 420.dp)`) in `LockOverlayScreen.kt` for the PIN keypad, lock card, and decoy fake crash dialog, preventing horizontal over-stretching on Pixel Fold and Pixel Tablet.
+  3. **Quality Gates & Architecture**:
+     - Passed `testFast` unit tests.
+     - Passed `lintDebug` with 0 errors.
+     - Logged ADR 052 in `docs/DECISIONS.md`.
+
 ## Next Steps
 - Physical Pixel 9 deployment via `adb install -r -d "app/build/outputs/apk/release/app-release.apk"` upon reconnecting device over USB or wireless adb.
 - Commit clean production deliverables to git repository (`git add` and `git commit`).

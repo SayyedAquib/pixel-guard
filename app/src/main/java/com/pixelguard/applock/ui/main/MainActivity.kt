@@ -81,7 +81,7 @@ class MainActivity : FragmentActivity() {
                 windowManager.defaultDisplay
             }
             currentDisplay?.supportedModes?.maxByOrNull { it.refreshRate }?.let { maxMode ->
-                if (maxMode.refreshRate >= 119f) {
+                if (maxMode.refreshRate >= 89f) {
                     val params = window.attributes
                     params.preferredDisplayModeId = maxMode.modeId
                     window.attributes = params
