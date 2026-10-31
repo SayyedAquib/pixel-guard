@@ -406,6 +406,12 @@
      - Passed `testFast` unit tests.
      - Passed `lintDebug` with 0 errors.
      - Logged ADR 052 in `docs/DECISIONS.md`.
+  4. **App Icon Modernization (Material 3 Pill & Capsule Lock)**:
+     - Replaced dated flat 4-color clip-art icon with the user-selected Material 3 Pill & Capsule Lock (Concept #1), styled after the Google Pixel 9 camera visor geometry.
+     - Generated multi-density adaptive PNG foregrounds across all mipmap density buckets (`mipmap-mdpi` through `xxxhdpi`) centered in the 66dp safe zone.
+     - Updated `ic_launcher_background.xml` to match the soft Material surface `#EDEEF2`.
+     - Redesigned `ic_launcher_monochrome.xml` with a clean vector silhouette for Android 13+ dynamic themed icons.
+     - Logged ADR 053 in `docs/DECISIONS.md`.
 
 ## Next Steps
 - Physical Pixel 9 deployment via `adb install -r -d "app/build/outputs/apk/release/app-release.apk"` upon reconnecting device over USB or wireless adb.

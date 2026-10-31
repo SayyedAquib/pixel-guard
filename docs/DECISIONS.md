@@ -1551,6 +1551,25 @@ Two fleet-wide UX challenges were identified:
 - Keypad on Pixel Fold and Pixel Tablet stays ergonomically centered, maintaining comfortable thumb reach.
 - Preserves 100% test compatibility across all 169 unit and Compose UI tests.
 
+---
+
+## ADR 053: App Icon Modernization (Material 3 Pill & Capsule Lock)
+### Date
+2026-10-31
+### Status
+Accepted
+### Context
+The previous launcher icon used a stark white canvas with flat four-color blocks and a cartoon clip-art padlock, which looked dated, lacked depth, and did not match the premium Material 3 design language of the Google Pixel 9.
+### Decision
+Adopted the **Material 3 Pill & Capsule Lock** design (Concept #1):
+1. **Design Motif**: Uses rounded pill/capsule geometry directly inspired by the Google Pixel 9 camera visor and Material You floating chips, in Google Deep Blue (`#1A73E8`), Mint Green (`#34A853`), and soft Lavender with subtle drop shadows.
+2. **Adaptive Foregrounds**: Generated multi-density adaptive PNG foregrounds across all density buckets (`mipmap-mdpi`, `hdpi`, `xhdpi`, `xxhdpi`, `xxxhdpi`) centered strictly within the 66dp safe zone of the 108dp canvas.
+3. **Adaptive Background**: Set `ic_launcher_background.xml` to match the soft Material surface `#EDEEF2`.
+4. **Android 13+ Themed Icons**: Redesigned `ic_launcher_monochrome.xml` with a clean vector silhouette of the pill & capsule lock and centered keyhole cutout.
+### Consequences
+- Eliminates amateurish clip-art appearance; elevates the app to a native Google Pixel flagship aesthetic.
+- Supports both standard full-color launchers and Android 13+ Material You dynamic themed icon tinting.
+
 
 
 
