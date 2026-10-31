@@ -116,6 +116,7 @@ captures/
 *.png
 *.jpg
 *.jpeg
+!app/src/main/res/mipmap*/*.png
 phone_screen.png
 current_screen.png
 current_device_screen.png

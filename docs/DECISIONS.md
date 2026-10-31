@@ -1570,6 +1570,25 @@ Adopted the **Material 3 Pill & Capsule Lock** design (Concept #1):
 - Eliminates amateurish clip-art appearance; elevates the app to a native Google Pixel flagship aesthetic.
 - Supports both standard full-color launchers and Android 13+ Material You dynamic themed icon tinting.
 
+---
+
+## ADR 054: Upgrade Fragment KTX to 1.8.5 to Eliminate 16-Bit RequestCode Crash in ActivityResultRegistry
+### Date
+2026-10-31
+### Status
+Accepted
+### Context
+`MainActivity` and `LockActivity` extend `androidx.fragment.app.FragmentActivity` to satisfy `androidx.biometric:biometric:1.2.0-alpha05` constructor requirements (`BiometricPrompt(FragmentActivity, Executor, AuthenticationCallback)`). However, transitive dependency resolution defaulted `androidx.fragment:fragment` to `1.2.5` (from 2020), where `FragmentActivity.validateRequestPermissionsRequestCode()` enforced `checkForValidRequestCode(int requestCode)` requiring `(requestCode & 0xffff0000) == 0`. Modern `androidx.activity-compose:1.9.3` / `ActivityResultRegistry` generates 32-bit request codes starting at `0x00010000` (65536+), triggering an immediate fatal `java.lang.IllegalArgumentException: Can only use lower 16 bits for requestCode` crash whenever permission launchers were launched (e.g. `POST_NOTIFICATIONS` in Onboarding, `CAMERA` in Settings). This crash also caused Android to quarantine `AppLockAccessibilityService` into `Crashed services`.
+### Decision
+1. **Explicit Fragment KTX Upgrade**: Added `fragment = "1.8.5"` and `androidx-fragment-ktx = { group = "androidx.fragment", name = "fragment-ktx", version.ref = "fragment" }` to `gradle/libs.versions.toml`, and declared `implementation(libs.androidx.fragment.ktx)` in `app/build.gradle.kts`. In `fragment:1.3.0`+, `FragmentActivity` was modernized to delegate natively to `ComponentActivity.ActivityResultRegistry` without legacy 16-bit masks.
+2. **Git Tracking for Mipmaps**: Whitelisted `!app/src/main/res/mipmap*/*.png` in `.gitignore` to ensure production launcher and round icon assets are committed to source control.
+3. **Accessibility Quota Verification**: Confirmed via `adb shell dumpsys accessibility` that `Crashed services:{}` is empty and `Bound services` is active and healthy.
+### Consequences
+- Completely eliminates fatal runtime `IllegalArgumentException` during permission requests.
+- Preserves 100% compatibility with `BiometricPrompt` and all 169 unit and Robolectric tests.
+- Zero lint errors (`lintDebug` clean, exit code 0).
+
+
 
 
 

@@ -412,6 +412,13 @@
      - Updated `ic_launcher_background.xml` to match the soft Material surface `#EDEEF2`.
      - Redesigned `ic_launcher_monochrome.xml` with a clean vector silhouette for Android 13+ dynamic themed icons.
      - Logged ADR 053 in `docs/DECISIONS.md`.
+  5. **Stability Audit & Crash Resolution (ADR 054)**:
+      - Diagnosed and resolved fatal `IllegalArgumentException: Can only use lower 16 bits for requestCode` crash caused by legacy `androidx.fragment:fragment:1.2.5` on the classpath during Compose `rememberLauncherForActivityResult` calls.
+      - Explicitly upgraded to `androidx.fragment:fragment-ktx:1.8.5` in `libs.versions.toml` and `app/build.gradle.kts`.
+      - Whitelisted `!app/src/main/res/mipmap*/*.png` in `.gitignore` so production icon assets are tracked in Git.
+      - Restored `AppLockAccessibilityService` from `Crashed services` back to active `Bound services` on physical Pixel 9.
+      - Compiled and installed production release APK (`app-release.apk`) on Pixel 9.
+      - Logged ADR 054 in `docs/DECISIONS.md`.
 
 ## Next Steps
 - Physical Pixel 9 deployment via `adb install -r -d "app/build/outputs/apk/release/app-release.apk"` upon reconnecting device over USB or wireless adb.

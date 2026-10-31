@@ -122,6 +122,7 @@ dependencies {
     debugImplementation(libs.androidx.ui.tooling)
 
     // Biometrics for Pixel 9 (Fingerprint + Face Unlock)
+    implementation(libs.androidx.fragment.ktx)
     implementation(libs.androidx.biometric)
 
     // DataStore Preferences & Keystore Encryption
