@@ -284,6 +284,32 @@ class AppLockAccessibilityServiceTest {
         assertThat(SessionManager.isTemporarilyUnlocked(instagramPackage, 0)).isFalse()
     }
 
+    @Test
+    fun screenOff_suspendsEventProcessing_andScreenOnResumesIt() {
+        val receiver = service.getScreenOffReceiverForTest()
+        val shadowService = shadowOf(service)
+
+        // Turn screen OFF
+        receiver.onReceive(service, Intent(Intent.ACTION_SCREEN_OFF))
+
+        val event = AccessibilityEvent.obtain().apply {
+            eventType = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+            packageName = instagramPackage
+            className = "com.instagram.mainactivity.MainActivity"
+        }
+        service.onAccessibilityEvent(event)
+
+        // While screen is off, zero activities started (preserves battery & CPU sleep state)
+        assertThat(shadowService.nextStartedActivity).isNull()
+
+        // Turn screen ON
+        receiver.onReceive(service, Intent(Intent.ACTION_SCREEN_ON))
+        service.onAccessibilityEvent(event)
+
+        // Once screen is on, event processing resumes normally
+        assertThat(shadowService.nextStartedActivity).isNotNull()
+    }
+
     // --- 7. Cold-Start Fail-Closed Protection (C-2) Tests ---
 
     @Test

@@ -48,7 +48,6 @@ class LockActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
         applyZeroTransition()
         enableEdgeToEdge()
-        enableHighRefreshRate()
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -321,23 +320,7 @@ class LockActivity : FragmentActivity() {
         goToHomeAndFinish()
     }
 
-    private fun enableHighRefreshRate() {
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-            val currentDisplay = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-                display
-            } else {
-                @Suppress("DEPRECATION")
-                windowManager.defaultDisplay
-            }
-            currentDisplay?.supportedModes?.maxByOrNull { it.refreshRate }?.let { maxMode ->
-                if (maxMode.refreshRate >= 89f) {
-                    val params = window.attributes
-                    params.preferredDisplayModeId = maxMode.modeId
-                    window.attributes = params
-                }
-            }
-        }
-    }
+
 
     private fun goToHomeAndFinish() {
         val homeIntent = Intent(Intent.ACTION_MAIN).apply {

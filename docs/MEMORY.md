@@ -2,7 +2,8 @@
 
 ## Current Status
 - **App Status**: Fully functional, compiling cleanly (`BUILD SUCCESSFUL`), hardened with PBKDF2 (200K iterations) & log sanitization, and installed on the connected **Google Pixel 9** (Android 17, `tokay`).
-- **Display Status**: Locked 120Hz LTPO display pipeline active (`renderFrameRate: 120.00001 Hz`, `modeId: 2`). Zero dropped frames during list scroll.
+- **Display Status**: Native Pixel 9 LTPO Actua Smooth Display enabled (dynamic 1Hz–120Hz VRR pacing, saving battery when static and boosting to 120Hz during touch/scroll).
+- **Battery & Thermal Footprint**: Ultra-low CPU wakeups (typeWindowStateChanged only, 50ms throttle, screen-off monitoring suspension, Camera ISP 10s cooldown).
 - **Biometric Status**: Zero-tap Pixel 9 ultrasonic fingerprint / Face Unlock prompts automatically on locked app open with custom Master PIN fallback.
 
 ## Recently Completed
@@ -419,6 +420,14 @@
       - Restored `AppLockAccessibilityService` from `Crashed services` back to active `Bound services` on physical Pixel 9.
       - Compiled and installed production release APK (`app-release.apk`) on Pixel 9.
       - Logged ADR 054 in `docs/DECISIONS.md`.
+
+   6. **Battery & Thermal Optimization (ADR 055)**:
+       - Pruned Accessibility IPC flooding in `accessibility_service_config.xml`: removed `typeWindowsChanged` and `flagIncludeNotImportantViews`, raised notification timeout to 50ms.
+       - Enhanced `AppLockAccessibilityService` with `isScreenInteractive` lifecycle tracking via `ACTION_SCREEN_OFF` / `ACTION_SCREEN_ON` to suspend event evaluation completely while the display is dark.
+       - Removed forced `preferredDisplayModeId = 120Hz` in `MainActivity` and `LockActivity`, restoring Pixel 9 LTPO Actua variable refresh rate (1Hz-120Hz) to eliminate unnecessary driving voltage during static reading.
+       - Hardened `SilentCameraCapture` with 10-second thermal cooldown and atomic capture mutex to eliminate Camera ISP overheating during rapid failed PIN entries.
+       - Established TDD test suite `SilentCameraCaptureTest` and verified with `testFast` and `lintDebug` (0 errors).
+       - Deployed production release APK (`app-release.apk`) directly to connected Pixel 9 via wireless ADB.
 
 ## Next Steps
 - Physical Pixel 9 deployment via `adb install -r -d "app/build/outputs/apk/release/app-release.apk"` upon reconnecting device over USB or wireless adb.

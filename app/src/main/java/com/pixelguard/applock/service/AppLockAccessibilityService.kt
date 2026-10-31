@@ -25,12 +25,20 @@ class AppLockAccessibilityService : AccessibilityService() {
     private var cachedLockedPackages: Set<String> = emptySet()
     private var cachedPreferences: com.pixelguard.applock.data.model.LockPreferences = com.pixelguard.applock.data.model.LockPreferences()
     private var isCachesReady: Boolean = false
+    private var isScreenInteractive: Boolean = true
 
-    private val screenOffReceiver = object : android.content.BroadcastReceiver() {
+    private val screenReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: android.content.Context?, intent: Intent?) {
-            if (intent?.action == Intent.ACTION_SCREEN_OFF) {
-                if (BuildConfig.DEBUG) Log.i(TAG, "Screen off event: resetting foreground session")
-                SessionManager.onScreenOff()
+            when (intent?.action) {
+                Intent.ACTION_SCREEN_OFF -> {
+                    if (BuildConfig.DEBUG) Log.i(TAG, "Screen off event: suspending accessibility monitoring")
+                    isScreenInteractive = false
+                    SessionManager.onScreenOff()
+                }
+                Intent.ACTION_SCREEN_ON -> {
+                    if (BuildConfig.DEBUG) Log.i(TAG, "Screen on event: resuming accessibility monitoring")
+                    isScreenInteractive = true
+                }
             }
         }
     }
@@ -77,11 +85,17 @@ class AppLockAccessibilityService : AccessibilityService() {
                 }
         }
 
-        val filter = android.content.IntentFilter(Intent.ACTION_SCREEN_OFF)
+        val powerManager = getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager
+        isScreenInteractive = powerManager?.isInteractive ?: true
+
+        val filter = android.content.IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_OFF)
+            addAction(Intent.ACTION_SCREEN_ON)
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(screenOffReceiver, filter, android.content.Context.RECEIVER_NOT_EXPORTED)
+            registerReceiver(screenReceiver, filter, android.content.Context.RECEIVER_NOT_EXPORTED)
         } else {
-            registerReceiver(screenOffReceiver, filter)
+            registerReceiver(screenReceiver, filter)
         }
     }
 
@@ -105,10 +119,16 @@ class AppLockAccessibilityService : AccessibilityService() {
 
     internal fun getLastPackageForTest(): String = lastPackage
 
-    internal fun getScreenOffReceiverForTest(): android.content.BroadcastReceiver = screenOffReceiver
+    internal fun getScreenOffReceiverForTest(): android.content.BroadcastReceiver = screenReceiver
+
+    internal fun setIsScreenInteractiveForTest(interactive: Boolean) {
+        isScreenInteractive = interactive
+    }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (event == null) return
+        // Battery & Thermal Optimization (BAT-002):
+        // If screen is dark/non-interactive, suspend all event processing to preserve CPU sleep states.
+        if (event == null || !isScreenInteractive) return
 
         // 1. Only process actual window state changes (activity/task transitions).
         // TYPE_WINDOWS_CHANGED emits continuously for gesture navigation bar, keyboard,
@@ -253,7 +273,7 @@ class AppLockAccessibilityService : AccessibilityService() {
     override fun onDestroy() {
         super.onDestroy()
         try {
-            unregisterReceiver(screenOffReceiver)
+            unregisterReceiver(screenReceiver)
         } catch (_: Exception) {}
         scope.cancel()
     }

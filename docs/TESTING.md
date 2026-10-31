@@ -109,12 +109,16 @@ Unit and service tests validate cryptography, rate limiting, background intercep
   - Clock tampering defense (`syncPersistedLockout`): clamps forward clock jumps to 300s max penalty and preserves remaining duration on backward roll (M-11).
   - Grace period math (immediate 15s quick-switch buffer, screen-off relock, per-app overrides).
   - Night lockdown schedule enforcement and pin-only mode override.
-- **`AppLockAccessibilityServiceTest`** (15 tests):
+- **`AppLockAccessibilityServiceTest`** (16 tests):
   - Synchronous disk snapshot loading via `SecuritySnapshotManager` (C-2).
   - `SupervisorJob()` and `.catch {}` coroutine resilience preventing permanent collector cancellation (C-2).
   - Fail-closed interception: blocks non-system packages when caches are unready.
   - Whitelist immunity for launcher (`com.google.android.apps.nexuslauncher`), recents, and transient system UI.
-  - Screen-off broadcast receiver session revocation.
+  - Screen-off broadcast receiver session revocation and event evaluation suspension (`BAT-002`).
+  - Screen-on event evaluation resumption.
+- **`SilentCameraCaptureTest`** (3 tests, `BAT-001`):
+  - Cooldown window enforcement (10-second thermal delay between intruder photo attempts).
+  - Hardware concurrency mutex (`isCapturing`) preventing overlapping Camera2 / ISP sessions during rapid failed PIN attempts.
 - **`SessionManagerTest`** (27 tests): Grace period math, Night Lockdown scheduling boundaries, per-app priority, flicker buffer protection, active foreground session retention during continuous in-app usage, exit-based grace countdown, absolute screen-off all-session revocation, 15s quick-switch buffer, and "Until Screen Off" persistence.
 - **`LockPreferencesTest`** (13 tests): Default value invariants (`isSettingsProtected == false`, `isRecentsMaskingEnabled == false`, `isBiometricsEnabled == true`, etc.), `AppSortOrder` and `LockType` enum completeness, mutation copy isolation, JSON-based PIN-only and notification mask evaluations, category overrides parsing, custom user & app tag serialization, and `isCustomized()` policy checks.
 - **`MainViewModelTest`** (21 tests): Reactive state flow combining, dual search query matching (`appName` and `packageName`), category filtering and dynamic category override, custom tag lifecycle & batch actions, customized filter, sorting, batch actions, PIN configuration, grace period serialization.

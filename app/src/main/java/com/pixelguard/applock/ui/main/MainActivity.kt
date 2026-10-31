@@ -46,7 +46,6 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        enableHighRefreshRate()
 
         // H-5: Tapjacking & Overlay suppression
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -72,23 +71,7 @@ class MainActivity : FragmentActivity() {
         }
     }
 
-    private fun enableHighRefreshRate() {
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-            val currentDisplay = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-                display
-            } else {
-                @Suppress("DEPRECATION")
-                windowManager.defaultDisplay
-            }
-            currentDisplay?.supportedModes?.maxByOrNull { it.refreshRate }?.let { maxMode ->
-                if (maxMode.refreshRate >= 89f) {
-                    val params = window.attributes
-                    params.preferredDisplayModeId = maxMode.modeId
-                    window.attributes = params
-                }
-            }
-        }
-    }
+
 
     override fun onResume() {
         super.onResume()

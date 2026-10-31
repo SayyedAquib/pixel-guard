@@ -38,12 +38,26 @@ class SilentCameraCapture(private val context: Context) {
             return
         }
 
-        val cameraManager = context.getSystemService(Context.CAMERA_SERVICE) as? CameraManager ?: return
+        // Hardware Protection (BAT-001): Cooldown & concurrency mutex prevents Camera ISP thermal spikes
+        if (!tryAcquireCapture()) {
+            if (BuildConfig.DEBUG) Log.w(TAG, "Intruder photo capture skipped due to cooldown or concurrent capture")
+            return
+        }
+
+        val cameraManager = context.getSystemService(Context.CAMERA_SERVICE) as? CameraManager
+        if (cameraManager == null) {
+            releaseCapture()
+            return
+        }
 
         val frontCameraId = cameraManager.cameraIdList.firstOrNull { id ->
             val characteristics = cameraManager.getCameraCharacteristics(id)
             characteristics.get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_FRONT
-        } ?: return
+        }
+        if (frontCameraId == null) {
+            releaseCapture()
+            return
+        }
 
         startBackgroundThread()
 
@@ -177,10 +191,57 @@ class SilentCameraCapture(private val context: Context) {
             backgroundHandler = null
         } catch (e: Exception) {
             if (BuildConfig.DEBUG) Log.e(TAG, "Error during camera cleanup: ${e.message}")
+        } finally {
+            releaseCapture()
         }
     }
 
     companion object {
         private const val TAG = "SilentCameraCapture"
+        private const val CAPTURE_COOLDOWN_MS = 10_000L
+
+        private val isCapturing = AtomicBoolean(false)
+        @Volatile private var lastCaptureTimestampMs: Long = 0L
+
+        /**
+         * Checks whether a new intruder photo can be captured based on hardware concurrency
+         * lock and the 10-second thermal cooldown.
+         */
+        fun canCapture(currentTimeMs: Long = System.currentTimeMillis()): Boolean {
+            if (isCapturing.get()) return false
+            return (currentTimeMs - lastCaptureTimestampMs) >= CAPTURE_COOLDOWN_MS
+        }
+
+        /**
+         * Atomically claims the camera hardware capture lock if outside the cooldown window.
+         */
+        fun tryAcquireCapture(currentTimeMs: Long = System.currentTimeMillis()): Boolean {
+            if (!canCapture(currentTimeMs)) return false
+            if (isCapturing.compareAndSet(false, true)) {
+                lastCaptureTimestampMs = currentTimeMs
+                return true
+            }
+            return false
+        }
+
+        private fun releaseCapture() {
+            isCapturing.set(false)
+        }
+
+        @androidx.annotation.VisibleForTesting
+        internal fun resetCooldownForTest() {
+            isCapturing.set(false)
+            lastCaptureTimestampMs = 0L
+        }
+
+        @androidx.annotation.VisibleForTesting
+        internal fun setLastCaptureTimeForTest(timestamp: Long) {
+            lastCaptureTimestampMs = timestamp
+        }
+
+        @androidx.annotation.VisibleForTesting
+        internal fun setIsCapturingForTest(capturing: Boolean) {
+            isCapturing.set(capturing)
+        }
     }
 }
