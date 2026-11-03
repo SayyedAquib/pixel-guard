@@ -41,12 +41,12 @@
 - Apply `FLAG_SECURE` to windows whenever `isRecentsMaskingEnabled` is active.
 - Save intruder photos strictly in internal sandboxed storage (`context.filesDir/intruders`) encrypted with Titan M2 Keystore keys. Never write intruder photos to `Environment.getExternalStorageDirectory()` or Android `MediaStore`.
 - Do not expose any network permissions (`android.permission.INTERNET`) in `AndroidManifest.xml`.
-- Do not declare or request `SYSTEM_ALERT_WINDOW` permission. App locking is managed exclusively via hardware-accelerated `LockActivity` with `resizeableActivity="false"` and multi-window evasion prevention.
+- Declare and request `SYSTEM_ALERT_WINDOW` alongside `PACKAGE_USAGE_STATS` to enable background launching of `LockActivity` on Android 10+ (API 29+) without requiring `AccessibilityService` (ADR 056).
 - All credential changes (e.g. Master PIN updates in Settings) must be rate-limited through `SessionManager` and trigger intruder photo capture on repeated failures.
 - Front camera capture must include a 4000ms watchdog timer to prevent Camera2 service lockups.
 - **6-Digit Passcode & Weak PIN Defense**: Master PINs must be strictly 6 digits (`MASTER_PIN_LENGTH = 6`). Reject repeating digits, sequential numbers, and blocklisted trivial combinations via `CryptoManager.isWeakPin()`.
 - **16-Character Offline Recovery Key**: Always generate a 16-character base32 recovery key (`XXXX-XXXX-XXXX-XXXX`) during PIN setup and store its PBKDF2 hash for verified offline credential recovery.
-- **Fail-Closed Interception**: `AppLockAccessibilityService` must load `SecuritySnapshotManager` synchronously on creation and block non-system packages if caches are unready. Collectors must be enclosed in `SupervisorJob()` and protected with `.catch {}`.
+- **Fail-Closed Interception**: `AppLockForegroundService` must load `SecuritySnapshotManager` synchronously on creation and block non-system packages if caches are unready. Collectors must be enclosed in `SupervisorJob()` and protected with `.catch {}`.
 - **Non-Destructive Notification Delivery**: Never cancel an original notification if `NotificationManagerCompat.areNotificationsEnabled()` is false or the masked channel is blocked. Fails closed toward delivery, never notification loss.
 - **Contextual Permission Requests**: Request `POST_NOTIFICATIONS` during onboarding; request `CAMERA` strictly on-demand when Intruder Selfie is toggled on in Settings. Default `isIntruderSelfieEnabled` to `false`.
 - **Locale-Independent Formatting**: Always use `Locale.ROOT` for hex encoding, decoding, and string case transformations to eliminate character conversion bugs.

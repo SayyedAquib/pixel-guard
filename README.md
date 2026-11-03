@@ -8,14 +8,14 @@
 [![Architecture](https://img.shields.io/badge/Architecture-Clean%20%2F%20UDF-orange?style=flat)](docs/ARCHITECTURE.md)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=flat)](LICENSE)
 
-**Pixel Guard** is an ultra-fast, native Android application locker engineered specifically for Google Pixel devices running **Android 17 and beyond** (backward compatible with Android 14+). Designed from the ground up for modern hardware, it combines zero-latency Accessibility interception, hardware-backed Titan M2 biometric authentication (ultrasonic fingerprint & Face Unlock), locked 120Hz LTPO display rendering, and an ultra-lean **3.3 MB** release footprint.
+**Pixel Guard** is an ultra-fast, native Android application locker engineered specifically for Google Pixel devices running **Android 17 and beyond** (backward compatible with Android 14+). Designed from the ground up for modern hardware, it combines banking-safe `UsageStatsManager` interception, hardware-backed Titan M2 biometric authentication (ultrasonic fingerprint & Face Unlock), locked 120Hz LTPO display rendering, and an ultra-lean release footprint.
 
 ---
 
 ## 🌟 Key Features
 
 ### ⚡ Performance & Core Protection
-- **⚡ Zero-Latency App Interception**: Intercepts foreground app launches within 0–8ms (`AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED`) before the target app renders its first frame.
+- **⚡ Banking-Safe App Interception**: Intercepts foreground app launches via `UsageStatsManager` (`PACKAGE_USAGE_STATS`) with adaptive 200ms background polling and screen-off suspension, permanently immunizing against Google Pay, PhonePe, and UPI fraud flags.
 - **👆 Zero-Tap Pixel 9 Biometrics**: Automatically engages the Pixel 9's ultrasonic fingerprint sensor and Class 3 Face Unlock on launch via `BiometricPrompt.BIOMETRIC_STRONG`, backed by Titan M2 hardware crypto.
 - **🔑 6-Digit Master Passcode & 16-Character Offline Recovery Key**: Custom 6-digit Master Passcode salted and stretched with PBKDF2/SHA-256 (200,000 iterations). Enforces entropy checking (`CryptoManager.isWeakPin`) rejecting sequential/repetitive patterns, accompanied by an unambiguous 16-character offline recovery key for fail-safe credential resets without data loss.
 - **🏎️ Locked 120Hz LTPO Smoothness**: App icons pre-rasterized to 120x120 on `Dispatchers.IO`, Compose `@Immutable` stability contracts, and zero dropped frames (<8.33ms budget) during fast dashboard scrolling.
@@ -66,7 +66,9 @@ app/src/main/java/com/pixelguard/applock/
 │   └── usecase/
 │       └── SessionManager.kt      # In-memory grace period, night lockdown, & transition buffer
 ├── service/
-│   ├── AppLockAccessibilityService.kt # Real-time foreground detection engine (0-8ms)
+│   ├── AppLockForegroundService.kt    # Sticky foreground detection & lifecycle service
+│   ├── usage/
+│   │   └── AppUsageDetector.kt        # UsageStats foreground detection engine
 │   ├── NotificationShieldService.kt   # Notification listener for privacy masking
 │   ├── PixelGuardTileService.kt       # Quick Settings tile with auth gate
 │   ├── BootReceiver.kt                # Device reboot handler
@@ -165,17 +167,12 @@ Pixel Guard maintains a robust unit test suite covering critical cryptographic o
 
 ---
 
-## 📱 Initial Setup on Android 17
+## 📱 Initial Setup on Android 17+
 
-Because Pixel Guard is a native security utility distributed as an APK, Android 17 applies **Restricted Settings** protections by default. Complete the one-time setup:
+Pixel Guard requires two straightforward permissions to protect your apps safely without triggering banking or Google Pay fraud alerts:
 
-1. **Display over other apps**: Toggle **Allow display over other apps** when prompted.
-2. **Accessibility Service**:
-   - If the toggle is greyed out with *"Restricted setting"*:
-     1. Open **Settings ➔ Apps ➔ Pixel Guard** (or tap *Open App Info* in the setup wizard).
-     2. Tap the **Three Dots (⋮)** in the top right corner.
-     3. Select **Allow restricted settings** and authenticate with your fingerprint/passcode.
-     4. Return to **Accessibility** and toggle **Pixel Guard** to **ON**.
+1. **App Detection (Usage Access)**: Tap **Enable** and allow **Usage Access** for Pixel Guard in system settings.
+2. **Display over other apps**: Toggle **Allow display over other apps** to allow the instant lock overlay to render.
 3. **Notification Shield** (Optional): Grant Notification Listener permission to mask message previews from locked applications.
 
 ---

@@ -29,11 +29,12 @@ import kotlinx.coroutines.launch
 
 data class PermissionStatus(
     val hasOverlayPermission: Boolean = false,
-    val hasAccessibilityPermission: Boolean,
-    val hasNotificationPermission: Boolean
+    val hasUsagePermission: Boolean = false,
+    val hasAccessibilityPermission: Boolean = false,
+    val hasNotificationPermission: Boolean = false
 ) {
     val isAllGranted: Boolean
-        get() = hasAccessibilityPermission
+        get() = hasUsagePermission && hasOverlayPermission
 }
 
 class MainViewModel(
@@ -419,14 +420,19 @@ class MainViewModel(
     fun checkPermissions(context: Context) {
         if (isTestingPermissions) return
         val hasOverlay = Settings.canDrawOverlays(context)
-        val accessibilityEnabled = isAccessibilityServiceEnabled(context)
+        val usageGranted = com.pixelguard.applock.service.usage.AppUsageDetector.hasUsageStatsPermission(context)
         val notificationEnabled = isNotificationServiceEnabled(context)
 
         _permissionStatus.value = PermissionStatus(
             hasOverlayPermission = hasOverlay,
-            hasAccessibilityPermission = accessibilityEnabled,
+            hasUsagePermission = usageGranted,
+            hasAccessibilityPermission = false,
             hasNotificationPermission = notificationEnabled
         )
+
+        if (usageGranted && hasOverlay) {
+            com.pixelguard.applock.service.AppLockForegroundService.start(context)
+        }
     }
 
     @androidx.annotation.VisibleForTesting
@@ -435,27 +441,6 @@ class MainViewModel(
         _permissionStatus.value = status
     }
 
-    private fun isAccessibilityServiceEnabled(context: Context): Boolean {
-        val expectedService = "${context.packageName}/${com.pixelguard.applock.service.AppLockAccessibilityService::class.java.canonicalName}"
-        val expectedShortService = "${context.packageName}/${com.pixelguard.applock.service.AppLockAccessibilityService::class.java.name}"
-        val enabledServices = Settings.Secure.getString(
-            context.contentResolver,
-            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-        ) ?: return false
-
-        val colonSplitter = TextUtils.SimpleStringSplitter(':')
-        colonSplitter.setString(enabledServices)
-        while (colonSplitter.hasNext()) {
-            val componentNameString = colonSplitter.next()
-            if (componentNameString.equals(expectedService, ignoreCase = true) ||
-                componentNameString.equals(expectedShortService, ignoreCase = true) ||
-                ComponentName.unflattenFromString(componentNameString)?.packageName == context.packageName
-            ) {
-                return true
-            }
-        }
-        return false
-    }
 
     private fun isNotificationServiceEnabled(context: Context): Boolean {
         val flat = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners") ?: return false

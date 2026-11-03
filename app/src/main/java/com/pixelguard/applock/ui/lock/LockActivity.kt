@@ -297,6 +297,7 @@ class LockActivity : FragmentActivity() {
 
     override fun onResume() {
         super.onResume()
+        isShowing = true
         // H-4 Resume Guard: Revalidate that target app was actually unlocked.
         // If an interrupting activity (phone call, system dialog) finishes and LockActivity resumes,
         // ensure target app remains locked unless an explicit successful unlock occurred.
@@ -305,6 +306,16 @@ class LockActivity : FragmentActivity() {
                 SessionManager.lockPackage(targetPackage)
             }
         }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        isShowing = false
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        isShowing = false
     }
 
     override fun onUserLeaveHint() {
@@ -352,5 +363,9 @@ class LockActivity : FragmentActivity() {
         const val EXTRA_TARGET_PACKAGE = "extra_target_package"
         const val ACTION_PAUSE_REQUEST = "com.pixelguard.applock.ACTION_PAUSE_REQUEST"
         const val EXTRA_PAUSE_MINUTES = "extra_pause_minutes"
+
+        @Volatile
+        var isShowing: Boolean = false
+            internal set
     }
 }

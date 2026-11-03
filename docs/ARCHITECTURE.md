@@ -8,14 +8,14 @@ Pixel Guard is architected as an Android system-level application protection sys
 ```mermaid
 graph TD
     User([User]) -->|Launches App| TargetApp[Target Protected App]
-    OS[Android OS / SurfaceFlinger] -->|TYPE_WINDOW_STATE_CHANGED| A11yService[AppLockAccessibilityService]
+    OS[Android OS / SurfaceFlinger] -->|PACKAGE_USAGE_STATS| UsageEngine[AppUsageDetector / AppLockForegroundService]
     
     subgraph "Pixel Guard Core System"
-        A11yService -->|Check Lock & Grace Period| SessionMgr[SessionManager]
+        UsageEngine -->|Check Lock & Grace Period| SessionMgr[SessionManager]
         SessionMgr -->|Read Locked Set & Prefs| Repo[AppLockRepository]
         Repo -->|Preferences Flow| DataStore[(Jetpack DataStore)]
         
-        SessionMgr -->|Lock Required| LockAct[LockActivity / OverlayWindowManager]
+        SessionMgr -->|Lock Required| LockAct[LockActivity]
         LockAct -->|Hardware Auth| BioPrompt[BiometricPrompt: Titan M2 / Ultrasonic]
         LockAct -->|Custom Fallback| Keypad[Glassmorphic PIN Keypad]
         Keypad -->|PBKDF2 (200K iter) Check| Crypto[CryptoManager / Keystore]
@@ -62,14 +62,14 @@ com.pixelguard.applock/
 │   └── usecase/
 │       └── SessionManager.kt      # State coordinator for grace periods & session unlocks
 ├── service/
-│   ├── AppLockAccessibilityService.kt # Real-time window state listener
-│   ├── AppLockForegroundService.kt    # Sticky foreground persistence service
+│   ├── AppLockForegroundService.kt    # Sticky foreground detection & lifecycle service
+│   ├── usage/
+│   │   └── AppUsageDetector.kt        # UsageStatsManager foreground package detector
 │   ├── NotificationShieldService.kt   # NotificationListenerService privacy filter
 │   ├── BootReceiver.kt                # BOOT_COMPLETED broadcast receiver
 │   ├── camera/
 │   │   └── SilentCameraCapture.kt     # Headless Camera2 front-facing photo capture
 │   └── overlay/
-│       ├── OverlayWindowManager.kt    # WindowManager TYPE_APPLICATION_OVERLAY manager
 │       └── LockOverlayScreen.kt       # Compose lock interface & decoy crash dialog
 └── ui/
     ├── main/
@@ -100,7 +100,7 @@ com.pixelguard.applock/
    - `PreferencesDataStore`: Encapsulates DataStore key-value reads/writes.
    - `CryptoManager`: Interfaces with cryptographic primitives.
 4. **Service Layer (`service/`)**:
-   - `AppLockAccessibilityService`: High-priority accessibility service receiving window transition events.
+   - `AppLockForegroundService` & `AppUsageDetector`: Background detection engine using `UsageStatsManager` (`PACKAGE_USAGE_STATS`) to safely monitor foreground app transitions without triggering banking or Google Pay fraud blocks.
    - `SilentCameraCapture`: Headless Camera2 session connecting to the front sensor.
 
 ## Database Architecture
@@ -114,7 +114,7 @@ com.pixelguard.applock/
 
 ## API Architecture
 Pixel Guard does not connect to external REST/GraphQL APIs. It interacts exclusively with Android System Services:
-- `AccessibilityService` (`TYPE_WINDOW_STATE_CHANGED`)
+- `UsageStatsManager` (`PACKAGE_USAGE_STATS`)
 - `WindowManager` (`TYPE_APPLICATION_OVERLAY`, `FLAG_SECURE`)
 - `BiometricManager` & `BiometricPrompt` (Class 3 Biometrics)
 - `CameraManager` (Headless Camera2 front sensor capture)
@@ -131,16 +131,16 @@ sequenceDiagram
     autonumber
     actor User
     participant Target as Target App (e.g. WhatsApp)
-    participant A11y as AppLockAccessibilityService
+    participant Engine as AppLockForegroundService
     participant Session as SessionManager
     participant Lock as LockActivity
     participant Bio as BiometricPrompt
     
     User->>Target: Taps App Icon
-    Target->>A11y: Window Transition Event
-    A11y->>Session: isTemporarilyUnlocked(pkg, grace)?
-    Session-->>A11y: False (Locked)
-    A11y->>Lock: startActivity(LockActivity)
+    Engine->>Engine: 200ms Adaptive Polling (UsageEvents)
+    Engine->>Session: isTemporarilyUnlocked(pkg, grace)?
+    Session-->>Engine: False (Locked)
+    Engine->>Lock: startActivity(LockActivity)
     Lock->>Bio: showBiometricPrompt() (Zero-Tap)
     
     alt User Authenticates with Fingerprint/Face
@@ -165,7 +165,7 @@ sequenceDiagram
 - **Pre-Rasterization Caching**: Icons are transformed on `Dispatchers.IO` to avoid UI-thread rasterization bottlenecks.
 
 ## System Boundaries
-- **Interception Boundary**: Operates outside the target app's process space using system Accessibility hooks.
+- **Interception Boundary**: Operates outside the target app's process space using Android `UsageStatsManager` and `SYSTEM_ALERT_WINDOW` background triggers.
 - **Credential Isolation Boundary**: Pixel Guard's Master PIN is isolated from Android's device lockscreen passcode.
 - **Media Boundary**: Intruder photos reside in `context.filesDir/intruders`, strictly isolated from Android `MediaStore`.
 

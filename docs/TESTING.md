@@ -109,13 +109,15 @@ Unit and service tests validate cryptography, rate limiting, background intercep
   - Clock tampering defense (`syncPersistedLockout`): clamps forward clock jumps to 300s max penalty and preserves remaining duration on backward roll (M-11).
   - Grace period math (immediate 15s quick-switch buffer, screen-off relock, per-app overrides).
   - Night lockdown schedule enforcement and pin-only mode override.
-- **`AppLockAccessibilityServiceTest`** (16 tests):
+- **`AppUsageDetectorTest` & `AppLockForegroundServiceTest`** (15 tests):
+  - Foreground package resolution from `UsageEvents` records (`resolveResumedPackage`).
+  - Target lock evaluation (`isTargetLocked`) and known system / transient exclusions.
   - Synchronous disk snapshot loading via `SecuritySnapshotManager` (C-2).
-  - `SupervisorJob()` and `.catch {}` coroutine resilience preventing permanent collector cancellation (C-2).
-  - Fail-closed interception: blocks non-system packages when caches are unready.
+  - Fail-closed cold-start interception: treats unknown packages as locked if caches are unready.
+  - Duplicate lock activity prevention via `@Volatile LockActivity.isShowing`.
   - Whitelist immunity for launcher (`com.google.android.apps.nexuslauncher`), recents, and transient system UI.
-  - Screen-off broadcast receiver session revocation and event evaluation suspension (`BAT-002`).
-  - Screen-on event evaluation resumption.
+  - Screen-off broadcast receiver session revocation and polling suspension (`BAT-002`).
+  - Screen-on evaluation resumption.
 - **`SilentCameraCaptureTest`** (3 tests, `BAT-001`):
   - Cooldown window enforcement (10-second thermal delay between intruder photo attempts).
   - Hardware concurrency mutex (`isCapturing`) preventing overlapping Camera2 / ISP sessions during rapid failed PIN attempts.

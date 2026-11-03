@@ -100,7 +100,7 @@ class MainScreenUiTest {
         viewModel.setPermissionStatusForTest(
             PermissionStatus(
                 hasOverlayPermission = true,
-                hasAccessibilityPermission = false,
+                hasUsagePermission = false,
                 hasNotificationPermission = false
             )
         )
@@ -126,7 +126,7 @@ class MainScreenUiTest {
         viewModel.setPermissionStatusForTest(
             PermissionStatus(
                 hasOverlayPermission = true,
-                hasAccessibilityPermission = true,
+                hasUsagePermission = true,
                 hasNotificationPermission = true
             )
         )

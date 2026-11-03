@@ -48,7 +48,7 @@ class OnboardingScreenUiTest {
         viewModel.setPermissionStatusForTest(
             PermissionStatus(
                 hasOverlayPermission = false,
-                hasAccessibilityPermission = false,
+                hasUsagePermission = false,
                 hasNotificationPermission = false
             )
         )
@@ -63,7 +63,7 @@ class OnboardingScreenUiTest {
         }
 
         composeTestRule.onNodeWithText("Welcome to Pixel Guard").assertExists()
-        composeTestRule.onNodeWithText("Display Over Other Apps").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Display Over Other Apps").assertExists()
         composeTestRule.onNodeWithText("App Detection").assertExists()
         composeTestRule.onNodeWithText("Hide Notification Details").assertExists()
         composeTestRule.onNodeWithText("Turn On App Detection").assertExists()
@@ -74,7 +74,7 @@ class OnboardingScreenUiTest {
         viewModel.setPermissionStatusForTest(
             PermissionStatus(
                 hasOverlayPermission = true,
-                hasAccessibilityPermission = true,
+                hasUsagePermission = true,
                 hasNotificationPermission = false
             )
         )
@@ -100,7 +100,7 @@ class OnboardingScreenUiTest {
         viewModel.setPermissionStatusForTest(
             PermissionStatus(
                 hasOverlayPermission = true,
-                hasAccessibilityPermission = true,
+                hasUsagePermission = true,
                 hasNotificationPermission = false
             )
         )
@@ -137,7 +137,7 @@ class OnboardingScreenUiTest {
         viewModel.setPermissionStatusForTest(
             PermissionStatus(
                 hasOverlayPermission = true,
-                hasAccessibilityPermission = true,
+                hasUsagePermission = true,
                 hasNotificationPermission = false
             )
         )
@@ -166,7 +166,7 @@ class OnboardingScreenUiTest {
         viewModel.setPermissionStatusForTest(
             PermissionStatus(
                 hasOverlayPermission = true,
-                hasAccessibilityPermission = true,
+                hasUsagePermission = true,
                 hasNotificationPermission = false
             )
         )
@@ -196,7 +196,7 @@ class OnboardingScreenUiTest {
         viewModel.setPermissionStatusForTest(
             PermissionStatus(
                 hasOverlayPermission = true,
-                hasAccessibilityPermission = true,
+                hasUsagePermission = true,
                 hasNotificationPermission = false
             )
         )
@@ -263,7 +263,7 @@ class OnboardingScreenUiTest {
         viewModel.setPermissionStatusForTest(
             PermissionStatus(
                 hasOverlayPermission = true,
-                hasAccessibilityPermission = true,
+                hasUsagePermission = true,
                 hasNotificationPermission = false
             )
         )
@@ -289,7 +289,7 @@ class OnboardingScreenUiTest {
         viewModel.setPermissionStatusForTest(
             PermissionStatus(
                 hasOverlayPermission = false,
-                hasAccessibilityPermission = false,
+                hasUsagePermission = false,
                 hasNotificationPermission = false
             )
         )
@@ -311,7 +311,7 @@ class OnboardingScreenUiTest {
         viewModel.setPermissionStatusForTest(
             PermissionStatus(
                 hasOverlayPermission = false,
-                hasAccessibilityPermission = false,
+                hasUsagePermission = false,
                 hasNotificationPermission = false
             )
         )

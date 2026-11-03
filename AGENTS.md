@@ -8,7 +8,7 @@ The project follows **Clean Architecture** and **Unidirectional Data Flow (UDF)*
 - **UI Layer (`ui/`)**: Pure Jetpack Compose with Material 3. Screens observe `StateFlow` from `MainViewModel`.
 - **Domain Layer (`domain/`)**: In-memory state coordinators and business rules (`SessionManager`).
 - **Data Layer (`data/`)**: Repository pattern (`AppLockRepositoryImpl`), encrypted preferences via Jetpack DataStore (`PreferencesDataStore`), and hardware crypto (`CryptoManager`).
-- **Service Layer (`service/`)**: Background Android system components (`AppLockAccessibilityService`, `NotificationShieldService`, `SilentCameraCapture`, `OverlayWindowManager`).
+- **Service Layer (`service/`)**: Background Android system components (`AppLockForegroundService`, `NotificationShieldService`, `SilentCameraCapture`, `AppUsageDetector`).
 
 ## Repository Structure
 ```
@@ -135,7 +135,7 @@ Before completing any task:
 - **DO NOT** deploy debug builds (`app-debug.apk`) to physical devices; ALWAYS deploy production release builds (`app-release.apk`).
 - **DO NOT** complete turns or tasks without immediately updating project documentation (`docs/DESIGN.md`, `docs/DECISIONS.md`, `docs/MEMORY.md`).
 - **DO NOT** leave temporary debug files, screencaps, or UI dumps in the workspace after work is completed.
-- **DO NOT** replace `AccessibilityService` with background polling timers (`UsageStatsManager` polling loops).
+- **DO NOT** re-introduce `AccessibilityService` or `BIND_ACCESSIBILITY_SERVICE`—this triggers Google Pay, PhonePe, and UPI fraud blocks (use `UsageStatsManager` & `AppLockForegroundService` per ADR 056).
 - **DO NOT** use `DEVICE_CREDENTIAL` in `BiometricPrompt.PromptInfo`—this compromises custom Master PIN security.
 - **DO NOT** store intruder photos in public `MediaStore` or external shared storage.
 - **DO NOT** call synchronous `toBitmap()` inside list item rendering passes.

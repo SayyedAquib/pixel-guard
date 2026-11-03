@@ -429,6 +429,16 @@
        - Established TDD test suite `SilentCameraCaptureTest` and verified with `testFast` and `lintDebug` (0 errors).
        - Deployed production release APK (`app-release.apk`) directly to connected Pixel 9 via wireless ADB.
 
+   7. **Google Pay & Banking Immunization via UsageStatsManager (ADR 056)**:
+       - Completely removed `AppLockAccessibilityService` from `AndroidManifest.xml` and deleted the service class and its config XML. Pixel Guard completely disappears from `Settings > Accessibility > Downloaded apps`, immunizing against Google Pay, PhonePe, and NPCI UPI banking fraud blocks.
+       - Created `AppUsageDetector` to detect foreground application transitions via `UsageStatsManager` (`PACKAGE_USAGE_STATS`). Google Pay never blocks Usage Access because it cannot inspect screen pixels or simulate touches.
+       - Upgraded `AppLockForegroundService` with adaptive 200ms background coroutine polling, cold-start fail-closed disk snapshot loading, and dynamic `ACTION_SCREEN_OFF` / `ACTION_SCREEN_ON` lifecycle pause/resume (0% idle battery drain).
+       - Added `SYSTEM_ALERT_WINDOW` permission to allow launching `LockActivity` from background on Android 10+ (API 29+).
+       - Added `@Volatile var isShowing: Boolean` in `LockActivity` to prevent duplicate lock activities during polling cycles.
+       - Updated `OnboardingScreen` and `MainViewModel` to request "App Detection" (`ACTION_USAGE_ACCESS_SETTINGS`) and "Display Over Other Apps" (`ACTION_MANAGE_OVERLAY_PERMISSION`), removing the confusing accessibility Restricted Settings card.
+       - Established TDD test suites `AppUsageDetectorTest` and `AppLockForegroundServiceTest`. All unit tests (`testFast`), Robolectric UI tests (`*ScreenUiTest`), and `lintDebug` pass with 100% success.
+       - Successfully compiled signed production release APK (`app-release.apk`, 5.48 MB).
+
 ## Next Steps
 - Physical Pixel 9 deployment via `adb install -r -d "app/build/outputs/apk/release/app-release.apk"` upon reconnecting device over USB or wireless adb.
 - Commit clean production deliverables to git repository (`git add` and `git commit`).

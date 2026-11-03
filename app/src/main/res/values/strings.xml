@@ -33,7 +33,7 @@
     <string name="onboarding_title">Setup Protection</string>
     <string name="onboarding_subtitle">Grant required permissions to enable zero-latency application locking on Pixel 9</string>
     <string name="onboarding_perm_accessibility_title">App Detection</string>
-    <string name="onboarding_perm_accessibility_desc">Allows Pixel Guard to instantly detect and lock your selected apps the moment they open.</string>
+    <string name="onboarding_perm_accessibility_desc">Allows Pixel Guard to safely detect when locked apps open without accessing screen content or triggering banking security blocks.</string>
     <string name="onboarding_perm_overlay_title">Display Over Other Apps</string>
     <string name="onboarding_perm_overlay_desc">Allows the hardware-accelerated lock screen overlay to render smoothly over target apps.</string>
     <string name="onboarding_perm_notification_title">Hide Notification Details</string>

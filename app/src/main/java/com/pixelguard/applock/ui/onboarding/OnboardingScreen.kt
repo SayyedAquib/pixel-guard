@@ -183,8 +183,8 @@ fun OnboardingScreen(
 
             Spacer(modifier = Modifier.height(18.dp))
 
-            // Android 17 Restricted Settings Warning Card (only shown while accessibility is not yet granted)
-            if (!permissionStatus.hasAccessibilityPermission) {
+            // Android 17 Restricted Settings Warning Card (only shown while permissions are not yet granted)
+            if (!permissionStatus.isAllGranted) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
@@ -241,14 +241,26 @@ fun OnboardingScreen(
 
             var isNotificationSkipped by remember { mutableStateOf(false) }
 
-            // 1. Accessibility Service (Required)
+            // 1. App Detection (Usage Access - Safe for Banking & UPI)
             PermissionCard(
                 title = stringResource(R.string.onboarding_perm_accessibility_title),
                 description = stringResource(R.string.onboarding_perm_accessibility_desc),
                 isRequired = true,
-                isGranted = permissionStatus.hasAccessibilityPermission,
-                icon = Icons.Default.Accessibility,
-                onGrant = { openAccessibilitySettings(context) }
+                isGranted = permissionStatus.hasUsagePermission,
+                icon = Icons.Default.Security,
+                onGrant = { openUsageAccessSettings(context) }
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // 2. Display Over Other Apps (Required for instant lock display)
+            PermissionCard(
+                title = stringResource(R.string.onboarding_perm_overlay_title),
+                description = stringResource(R.string.onboarding_perm_overlay_desc),
+                isRequired = true,
+                isGranted = permissionStatus.hasOverlayPermission,
+                icon = Icons.Default.Layers,
+                onGrant = { openOverlaySettings(context) }
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -416,6 +428,8 @@ fun OnboardingScreen(
 
                 val buttonText = when {
                     permissionStatus.isAllGranted -> "Get Started"
+                    !permissionStatus.hasUsagePermission -> "Turn On App Detection"
+                    !permissionStatus.hasOverlayPermission -> "Enable Display Over Other Apps"
                     else -> "Turn On App Detection"
                 }
 
@@ -423,8 +437,10 @@ fun OnboardingScreen(
                     onClick = {
                         if (permissionStatus.isAllGranted) {
                             onComplete()
-                        } else {
-                            openAccessibilitySettings(context)
+                        } else if (!permissionStatus.hasUsagePermission) {
+                            openUsageAccessSettings(context)
+                        } else if (!permissionStatus.hasOverlayPermission) {
+                            openOverlaySettings(context)
                         }
                     },
                     modifier = Modifier
@@ -732,12 +748,22 @@ private fun openOverlaySettings(context: Context) {
         Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
         Uri.parse("package:${context.packageName}")
     )
-    context.startActivity(intent)
+    try {
+        context.startActivity(intent)
+    } catch (_: Exception) {
+        context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION))
+    }
 }
 
-private fun openAccessibilitySettings(context: Context) {
-    val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-    context.startActivity(intent)
+private fun openUsageAccessSettings(context: Context) {
+    val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
+        data = Uri.parse("package:${context.packageName}")
+    }
+    try {
+        context.startActivity(intent)
+    } catch (_: Exception) {
+        context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+    }
 }
 
 private fun openNotificationListenerSettings(context: Context) {

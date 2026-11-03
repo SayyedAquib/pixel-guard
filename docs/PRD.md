@@ -16,20 +16,20 @@ Standard third-party Android app lockers suffer from four fatal flaws on modern 
 4. **Recents & Notification Leaks**: Even when locked, app overview snapshots (Recents screen) and heads-up notifications routinely reveal private chats and bank balances.
 
 ## Goals
-- **Zero-Latency Interception**: Intercept target app launches within 0ms to 8ms (`AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED`) before the first app frame renders.
+- **Safe & Instant Interception**: Intercept target app launches within milliseconds via `UsageStatsManager` and foreground service lifecycle monitoring, completely eliminating Google Pay and UPI banking security blocks.
 - **Hardware-Enforced Security**: Authenticate via Pixel 9's Titan M2 security chip and ultrasonic fingerprint reader, backed by an isolated PBKDF2/SHA-256 salted PIN that is completely distinct from the device lockscreen PIN.
 - **Locked 120Hz Rendering**: Maintain a continuous 120Hz refresh rate budget (<8.33ms per frame) during list navigation with asynchronous IO icon pre-rasterization.
 - **Ambient Privacy Shielding**: Block screen captures in Recents via `FLAG_SECURE`, suppress notification previews from locked apps, and silently log intrusion attempts with front-camera capture.
 
 ## Non-Goals
-- **Universal Android 8–10 Legacy Support**: Not designed for outdated Android versions lacking modern Material 3, Camera2 headless capabilities, or Android 17 restricted permission frameworks.
-- **Google Play Store Policy Compromise**: Will not degrade the real-time Accessibility interception engine to satisfy Play Store Accessibility restrictions.
+- **Universal Android 8–10 Legacy Support**: Not designed for outdated Android versions lacking modern Material 3, Camera2 headless capabilities, or modern permission frameworks.
+- **Accessibility Service Usage**: Will not declare or bind to `AccessibilityService`, preventing Android banking/UPI trojan heuristic blocks.
 - **Remote Cloud Sync & Account Tracking**: Zero cloud servers, telemetry, or accounts; all cryptographic keys and audit logs remain strictly sandboxed on the local device.
 
 ## Core Features (MVP)
-1. **Zero-Latency Window Interception**: Accessibility hook intercepting window state changes immediately.
-2. **Hardware Biometrics & Dual-Layer PIN**: Seamless Pixel 9 ultrasonic fingerprint / Face Unlock auto-prompt on app launch with graceful fallback to a 4-digit master PIN.
-3. **120Hz Smooth Display Pipeline**: Pre-rasterized 120x120 ARGB_8888 icons on `Dispatchers.IO`, Compose stability annotations (`@Immutable`), and `window.attributes.preferredDisplayModeId` request.
+1. **Banking-Safe Foreground Interception**: Adaptive background polling loop with `UsageStatsManager` (`PACKAGE_USAGE_STATS`) and `SYSTEM_ALERT_WINDOW`.
+2. **Hardware Biometrics & Dual-Layer PIN**: Seamless Pixel 9 ultrasonic fingerprint / Face Unlock auto-prompt on app launch with graceful fallback to a 6-digit master PIN.
+3. **120Hz Smooth Display Pipeline**: Pre-rasterized 120x120 ARGB_8888 icons on `Dispatchers.IO`, Compose stability annotations (`@Immutable`), and LTPO variable refresh rate.
 4. **App-Themed Material You Theming**: Radial ambient glow and pulse rings dynamically extracting and adapting to the locked app's signature colors (WhatsApp green, YouTube ruby, Instagram magenta, etc.).
 5. **Contextual Category Batch Controls**: 1-tap "Lock All" / "Unlock All" buttons appearing upon category filter selection (Financial, Social, Sensitive, System).
 6. **Per-App Grace Periods & Night Lockdown**: Granular re-lock timing per application (Instant, 30s, 1m, 5m, 15m, Until screen off) and automated strict 0s lockdown during nighttime hours.
@@ -37,10 +37,10 @@ Standard third-party Android app lockers suffer from four fatal flaws on modern 
 8. **Decoy "Fake Crash" Mode**: Authentic *"Unfortunately, [App] keeps stopping"* system dialog with secret long-press bypass to fool snoopers.
 9. **Headless Intruder Selfie**: Captures front-camera photo via Camera2 after configurable failed PIN attempts, stored in encrypted internal app storage.
 10. **Notification Privacy Shield**: Intercepts and masks sensitive notification previews from protected packages.
-11. **Android 17 Sideload Onboarding**: Interactive permission setup clearly demarcating 2 Required permissions (Overlay, Accessibility) and 1 Optional (Notification Shield) with a direct "Allow restricted settings" shortcut.
+11. **Modern Sideload Onboarding**: Interactive permission setup clearly demarcating 2 Required permissions (App Detection / Usage Access, Display Over Other Apps) and 1 Optional (Notification Shield).
 
 ## User Flows
-- **Initial Setup**: Install APK ➔ Launch Pixel Guard ➔ Review Required vs Optional permissions ➔ Follow "Open App Info" to allow restricted settings ➔ Enable Accessibility & Overlay ➔ Set 4-digit Master PIN ➔ Main Dashboard unlocked.
+- **Initial Setup**: Install APK ➔ Launch Pixel Guard ➔ Review Required vs Optional permissions ➔ Enable App Detection (Usage Access) & Display Over Other Apps ➔ Set 6-digit Master PIN ➔ Main Dashboard unlocked.
 - **Protecting Apps**: Open Dashboard ➔ Tap category chip (e.g., Financial) ➔ Tap "Lock All" on the Category Action Strip ➔ Status indicator updates to protected.
 - **Unlocking an App**: Tap WhatsApp on Home screen ➔ Pixel Guard intercept activates ➔ Biometric prompt appears automatically ➔ Touch ultrasonic fingerprint sensor ➔ Overlay dismisses smoothly into WhatsApp.
 - **Fallback PIN Entry**: Biometrics fail or user taps "Use PIN" ➔ User enters custom 4-digit PIN on glassmorphic keypad ➔ App unlocks.
