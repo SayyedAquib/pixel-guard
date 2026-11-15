@@ -439,6 +439,14 @@
        - Established TDD test suites `AppUsageDetectorTest` and `AppLockForegroundServiceTest`. All unit tests (`testFast`), Robolectric UI tests (`*ScreenUiTest`), and `lintDebug` pass with 100% success.
        - Successfully compiled signed production release APK (`app-release.apk`, 5.48 MB).
 
+   8. **Device Reboot Auto-Start Remediation (ADR 057)**:
+       - Resolved defect where restarting the device allowed locked apps to open directly without a lock screen.
+       - Removed legacy `isForegroundServiceEnabled` gate in `BootReceiver.kt`, initiating `AppLockForegroundService.start(context)` immediately on the main thread upon boot.
+       - Added multi-stage broadcast triggers (`ACTION_BOOT_COMPLETED`, `ACTION_USER_UNLOCKED`, `ACTION_MY_PACKAGE_REPLACED`) in `AndroidManifest.xml` and `BootReceiver.kt`.
+       - Changed default `isForegroundServiceEnabled` in `LockPreferences.kt` to `true`.
+       - Followed TDD: implemented `BootReceiverTest.kt` (4 tests) and enhanced `AppLockForegroundServiceTest.kt` verifying cold-start and boot behaviors. All unit tests (`testFast`) and `lintDebug` passed cleanly.
+       - Compiled and deployed production release APK (`app-release.apk`) directly to connected Pixel 9 via ADB.
+
 ## Next Steps
 - Physical Pixel 9 deployment via `adb install -r -d "app/build/outputs/apk/release/app-release.apk"` upon reconnecting device over USB or wireless adb.
 - Commit clean production deliverables to git repository (`git add` and `git commit`).

@@ -3,8 +3,6 @@ package com.pixelguard.applock.service
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.os.Build
-import com.pixelguard.applock.AppLockApplication
 import com.pixelguard.applock.data.local.PreferencesDataStore
 import com.pixelguard.applock.domain.usecase.SessionManager
 import kotlinx.coroutines.CoroutineScope
@@ -15,13 +13,18 @@ import kotlinx.coroutines.launch
 class BootReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action == Intent.ACTION_BOOT_COMPLETED ||
-            intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
-
-            // Wipe all session tokens
+        val action = intent.action ?: return
+        if (action == Intent.ACTION_BOOT_COMPLETED ||
+            action == Intent.ACTION_MY_PACKAGE_REPLACED ||
+            action == Intent.ACTION_USER_UNLOCKED
+        ) {
+            // 1. Wipe all temporary unlock sessions immediately on device reboot/package update
             SessionManager.clearAllSessions()
 
-            // PG-SEC-12: Use goAsync() so Android does not kill the process before async initialization completes
+            // 2. Start AppLockForegroundService immediately on the main thread (0ms delay)
+            AppLockForegroundService.start(context)
+
+            // 3. PG-SEC-12: Use goAsync() for background lockout synchronization
             val pendingResult = goAsync()
             CoroutineScope(Dispatchers.IO).launch {
                 try {
@@ -34,16 +37,6 @@ class BootReceiver : BroadcastReceiver() {
                         wallClockExpiryMs = wallClockExpiry,
                         durationRemainingMs = durationMs
                     )
-
-                    val preferences = AppLockApplication.instance.repository.preferences.first()
-                    if (preferences.isForegroundServiceEnabled) {
-                        val serviceIntent = Intent(context, AppLockForegroundService::class.java)
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                            context.startForegroundService(serviceIntent)
-                        } else {
-                            context.startService(serviceIntent)
-                        }
-                    }
                 } catch (_: Exception) {
                 } finally {
                     pendingResult.finish()

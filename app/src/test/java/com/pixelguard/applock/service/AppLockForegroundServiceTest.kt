@@ -2,9 +2,11 @@ package com.pixelguard.applock.service
 
 import android.content.Intent
 import com.google.common.truth.Truth.assertThat
+import com.pixelguard.applock.AppLockApplication
 import com.pixelguard.applock.data.model.LockPreferences
 import com.pixelguard.applock.domain.usecase.SessionManager
 import com.pixelguard.applock.ui.lock.LockActivity
+import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -151,12 +153,23 @@ class AppLockForegroundServiceTest {
     }
 
     @Test
-    fun playStoreProtection_whenEnabled_interceptsPlayStore() {
-        val triggered = service.processForegroundPackage("com.android.vending")
-        assertThat(triggered).isTrue()
-        val shadowService = shadowOf(service)
-        assertThat(shadowService.nextStartedActivity?.getStringExtra(LockActivity.EXTRA_TARGET_PACKAGE))
-            .isEqualTo("com.android.vending")
+    fun coldStart_loadsSecuritySnapshotImmediatelyOnCreate() {
+        runBlocking {
+            val repo = AppLockApplication.instance.repository
+            repo.setAppLocked("com.example.secret", true)
+
+            val freshController = Robolectric.buildService(AppLockForegroundService::class.java)
+            val freshService = freshController.create().get()
+
+            val triggered = freshService.processForegroundPackage("com.example.secret")
+            assertThat(triggered).isTrue()
+            val shadow = shadowOf(freshService)
+            assertThat(shadow.nextStartedActivity?.getStringExtra(LockActivity.EXTRA_TARGET_PACKAGE))
+                .isEqualTo("com.example.secret")
+
+            freshController.destroy()
+            repo.setAppLocked("com.example.secret", false)
+        }
     }
 }
 

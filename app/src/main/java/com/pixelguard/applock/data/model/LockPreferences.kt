@@ -22,7 +22,7 @@ data class LockPreferences(
     val isSettingsProtected: Boolean = false,
     val isPlayStoreProtected: Boolean = false,
     val isScramblePinEnabled: Boolean = false,
-    val isForegroundServiceEnabled: Boolean = false,
+    val isForegroundServiceEnabled: Boolean = true,
 
     // 1. Recents Privacy Masking (FLAG_SECURE)
     val isRecentsMaskingEnabled: Boolean = false,

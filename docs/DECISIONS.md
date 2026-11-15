@@ -1654,6 +1654,40 @@ High-value transfers (e.g. ₹1 Lakh) trigger banking and UPI anti-trojan heuris
 - Zero CPU execution and zero battery drain while the device screen is off.
 - 100% test suite pass rate across unit and Compose UI tests; clean lint and production release APK build.
 
+---
+
+## ADR 057: Device Reboot Auto-Start Remediation via Multi-Stage Boot Broadcasts
+### Date
+2026-11-15
+### Status
+Accepted
+### Context
+Following the migration from `AccessibilityService` to `UsageStatsManager` (ADR 056), a critical defect was discovered upon phone reboot:
+When the user restarted the device (powered off and on), opening any locked application opened directly without displaying the lock screen.
+Investigation revealed:
+1. `BootReceiver.kt` previously guarded service startup behind `if (preferences.isForegroundServiceEnabled)`. In `LockPreferences.kt`, `isForegroundServiceEnabled` had defaulted to `false` (legacy behavior from when `AccessibilityService` was auto-bound by the OS on boot).
+2. Consequently, `BootReceiver` never started `AppLockForegroundService` on boot.
+3. Without `AppLockForegroundService` actively running, `UsageStatsManager` was not monitored, allowing protected apps to open unhindered.
+
+### Decision
+1. **Unconditional Auto-Start on Boot**:
+   - In `BootReceiver.kt`, removed the legacy `isForegroundServiceEnabled` check. `AppLockForegroundService.start(context)` is invoked directly on the main thread upon boot to begin detection with 0ms latency.
+   - Updated `LockPreferences.isForegroundServiceEnabled` default value to `true`.
+2. **Multi-Stage Boot Broadcast Handlers**:
+   - Registered `Intent.ACTION_BOOT_COMPLETED`, `Intent.ACTION_USER_UNLOCKED`, and `Intent.ACTION_MY_PACKAGE_REPLACED` in `AndroidManifest.xml` and `BootReceiver.kt`.
+   - `ACTION_USER_UNLOCKED` ensures the service starts at the earliest moment credential-encrypted storage becomes accessible after first user unlock.
+3. **Session Purge & Lockout Sync**:
+   - `BootReceiver` immediately purges all transient sessions (`SessionManager.clearAllSessions()`) and uses `goAsync()` to synchronize persisted lockouts in the background.
+4. **TDD Test Suite**:
+   - Created `BootReceiverTest.kt` verifying immediate service launch on all three broadcast actions and session clearing.
+   - Verified cold-start security snapshot behavior in `AppLockForegroundServiceTest.kt`.
+
+### Consequences
+- Background protection starts immediately on device boot and package update.
+- Locked apps are intercepted immediately after restart without requiring Pixel Guard to be launched manually.
+- 100% passing tests across `BootReceiverTest`, `AppLockForegroundServiceTest`, `testFast`, and clean production deployment to Pixel 9.
+
+
 
 
 

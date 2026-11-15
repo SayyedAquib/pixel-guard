@@ -24,7 +24,7 @@ class LockPreferencesTest {
         assertFalse("Settings protection must default to false", prefs.isSettingsProtected)
         assertFalse("Play Store protection must default to false", prefs.isPlayStoreProtected)
         assertFalse("Scramble PIN should default to false", prefs.isScramblePinEnabled)
-        assertFalse("Foreground service should default to false", prefs.isForegroundServiceEnabled)
+        assertTrue("Foreground service should default to true", prefs.isForegroundServiceEnabled)
 
         // Recents Privacy Masking (Must default to false to prevent black screen in scrcpy screen mirroring)
         assertFalse("Recents privacy masking must default to false for screen mirroring", prefs.isRecentsMaskingEnabled)
