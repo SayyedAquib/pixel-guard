@@ -86,11 +86,20 @@ import com.pixelguard.applock.ui.common.HapticManager
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
+enum class LockVerificationState {
+    Idle,
+    Verifying,
+    Success,
+    Failed
+}
+
 @Composable
 fun LockOverlayScreen(
     targetPackage: String,
     targetAppName: String,
-    targetIcon: Drawable?,
+    targetIcon: Drawable? = null,
+    targetIconBitmap: android.graphics.Bitmap? = null,
+    verificationState: LockVerificationState = LockVerificationState.Idle,
     isDecoyEnabled: Boolean,
     isBiometricEnabled: Boolean,
     isHapticsEnabled: Boolean = true,
@@ -126,6 +135,44 @@ fun LockOverlayScreen(
         }
     }
 
+    LaunchedEffect(verificationState) {
+        when (verificationState) {
+            LockVerificationState.Verifying -> {
+                isVerifying = true
+            }
+            LockVerificationState.Success -> {
+                isUnlocked = true
+                isVerifying = false
+            }
+            LockVerificationState.Failed -> {
+                val lockout = lockoutSecondsProvider()
+                if (lockout > 0) {
+                    currentLockout = lockout
+                }
+                attemptsUntilLockout = attemptsUntilLockoutProvider()
+                if (isAnimationsEnabled) {
+                    launch { dotErrorAnim.animateTo(1f, tween(60)) }
+                    shakeOffset.animateTo(22f, tween(45))
+                    shakeOffset.animateTo(-22f, tween(45))
+                    shakeOffset.animateTo(14f, tween(45))
+                    shakeOffset.animateTo(-14f, tween(45))
+                    shakeOffset.animateTo(0f, tween(45))
+                    dotFadeAnim.animateTo(0f, tween(120))
+                }
+                pinInput = ""
+                if (isScramblePinEnabled) {
+                    scrambleKey++
+                }
+                dotErrorAnim.snapTo(0f)
+                dotFadeAnim.snapTo(1f)
+                isVerifying = false
+            }
+            LockVerificationState.Idle -> {
+                isVerifying = false
+            }
+        }
+    }
+
     val infiniteTransition = rememberInfiniteTransition(label = "biometric_pulse")
     val pulseScale by if (isAnimationsEnabled) {
         infiniteTransition.animateFloat(
@@ -155,9 +202,9 @@ fun LockOverlayScreen(
     }
 
     val defaultPrimary = Color(0xFFA8C7FA)
-    val brandColor = remember(targetPackage, targetIcon, defaultPrimary, isDynamicThemingEnabled) {
+    val brandColor = remember(targetPackage, targetIconBitmap, targetIcon, defaultPrimary, isDynamicThemingEnabled) {
         if (isDynamicThemingEnabled) {
-            resolveAppBrandColor(targetPackage, targetIcon, defaultPrimary)
+            resolveAppBrandColor(targetPackage, targetIconBitmap, targetIcon, defaultPrimary)
         } else {
             defaultPrimary
         }
@@ -356,10 +403,10 @@ fun LockOverlayScreen(
                                     tint = Color(0xFF34A853),
                                     modifier = Modifier.size(38.dp)
                                 )
-                            } else if (targetIcon != null) {
-                                val bitmap = remember(targetIcon) {
+                            } else if (targetIconBitmap != null || targetIcon != null) {
+                                val bitmap = targetIconBitmap ?: remember(targetIcon) {
                                     try {
-                                        targetIcon.toBitmap(120, 120)
+                                        targetIcon?.toBitmap(120, 120)
                                     } catch (_: Exception) {
                                         null
                                     }
@@ -695,32 +742,34 @@ fun LockOverlayScreen(
                                                         if (updated.length == 6) {
                                                             isVerifying = true
                                                             onPinSubmitted(updated)
-                                                            scope.launch {
-                                                                kotlinx.coroutines.delay(350L)
-                                                                val lockout = lockoutSecondsProvider()
-                                                                if (lockout > 0) {
-                                                                    currentLockout = lockout
+                                                            if (verificationState == LockVerificationState.Idle) {
+                                                                // Legacy/fallback behavior when verificationState is not externally bound (e.g. unit tests)
+                                                                scope.launch {
+                                                                    kotlinx.coroutines.delay(600L)
+                                                                    if (isVerifying && verificationState == LockVerificationState.Idle) {
+                                                                        val lockout = lockoutSecondsProvider()
+                                                                        if (lockout > 0) {
+                                                                            currentLockout = lockout
+                                                                        }
+                                                                        attemptsUntilLockout = attemptsUntilLockoutProvider()
+                                                                        if (isAnimationsEnabled) {
+                                                                            launch { dotErrorAnim.animateTo(1f, tween(60)) }
+                                                                            shakeOffset.animateTo(22f, tween(45))
+                                                                            shakeOffset.animateTo(-22f, tween(45))
+                                                                            shakeOffset.animateTo(14f, tween(45))
+                                                                            shakeOffset.animateTo(-14f, tween(45))
+                                                                            shakeOffset.animateTo(0f, tween(45))
+                                                                            dotFadeAnim.animateTo(0f, tween(120))
+                                                                        }
+                                                                        pinInput = ""
+                                                                        if (isScramblePinEnabled) {
+                                                                            scrambleKey++
+                                                                        }
+                                                                        dotErrorAnim.snapTo(0f)
+                                                                        dotFadeAnim.snapTo(1f)
+                                                                        isVerifying = false
+                                                                    }
                                                                 }
-                                                                attemptsUntilLockout = attemptsUntilLockoutProvider()
-                                                                if (isAnimationsEnabled) {
-                                                                    // Stage 1: Error Red Morph
-                                                                    launch { dotErrorAnim.animateTo(1f, tween(60)) }
-                                                                    // Stage 2: Elastic Shake
-                                                                    shakeOffset.animateTo(22f, tween(45))
-                                                                    shakeOffset.animateTo(-22f, tween(45))
-                                                                    shakeOffset.animateTo(14f, tween(45))
-                                                                    shakeOffset.animateTo(-14f, tween(45))
-                                                                    shakeOffset.animateTo(0f, tween(45))
-                                                                    // Stage 3: Smooth Dissolve
-                                                                    dotFadeAnim.animateTo(0f, tween(120))
-                                                                }
-                                                                pinInput = ""
-                                                                if (isScramblePinEnabled) {
-                                                                    scrambleKey++
-                                                                }
-                                                                dotErrorAnim.snapTo(0f)
-                                                                dotFadeAnim.snapTo(1f)
-                                                                isVerifying = false
                                                             }
                                                         }
                                                     }
@@ -761,7 +810,12 @@ fun LockOverlayScreen(
 /**
  * Resolves signature brand color from package name or dynamically samples the app icon.
  */
-fun resolveAppBrandColor(packageName: String, icon: Drawable?, defaultColor: Color): Color {
+fun resolveAppBrandColor(
+    packageName: String,
+    iconBitmap: android.graphics.Bitmap?,
+    iconDrawable: Drawable?,
+    defaultColor: Color
+): Color {
     val lower = packageName.lowercase(Locale.ROOT)
     return when {
         lower.contains("whatsapp") -> Color(0xFF25D366)
@@ -780,13 +834,21 @@ fun resolveAppBrandColor(packageName: String, icon: Drawable?, defaultColor: Col
         lower.contains("amazon") -> Color(0xFFFF9900)
         lower.contains("netflix") -> Color(0xFFE50914)
         else -> {
-            if (icon != null) {
+            val bitmap = iconBitmap ?: run {
                 try {
-                    val bitmap = icon.toBitmap(24, 24)
+                    iconDrawable?.toBitmap(24, 24)
+                } catch (_: Exception) {
+                    null
+                }
+            }
+            if (bitmap != null) {
+                try {
                     var bestColor = defaultColor
                     var maxSaturation = 0.2f
-                    for (x in 2 until 22 step 2) {
-                        for (y in 2 until 22 step 2) {
+                    val stepX = (bitmap.width / 12).coerceAtLeast(1)
+                    val stepY = (bitmap.height / 12).coerceAtLeast(1)
+                    for (x in stepX until bitmap.width - stepX step stepX) {
+                        for (y in stepY until bitmap.height - stepY step stepY) {
                             val pixel = bitmap.getPixel(x, y)
                             val alpha = android.graphics.Color.alpha(pixel)
                             if (alpha < 128) continue
@@ -811,3 +873,6 @@ fun resolveAppBrandColor(packageName: String, icon: Drawable?, defaultColor: Col
         }
     }
 }
+
+fun resolveAppBrandColor(packageName: String, icon: Drawable?, defaultColor: Color): Color =
+    resolveAppBrandColor(packageName, null, icon, defaultColor)

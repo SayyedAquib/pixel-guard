@@ -160,7 +160,7 @@ fun IntruderLogsScreen(
 
     // Photo Preview Dialog with Pinch-to-Zoom & Incident Metadata
     selectedRecordForPreview?.let { record ->
-        val bitmap = rememberDecryptedBitmap(record.photoPath)
+        val bitmap = rememberDecryptedBitmap(record.photoPath, maxDimension = 1080)
 
         AlertDialog(
             onDismissRequest = { selectedRecordForPreview = null },
@@ -386,10 +386,39 @@ fun IntruderRecordCard(
     }
 }
 
+private val intruderBitmapCache = android.util.LruCache<String, android.graphics.Bitmap>(30)
+
+private fun calculateInSampleSize(options: BitmapFactory.Options, reqWidth: Int, reqHeight: Int): Int {
+    val height = options.outHeight
+    val width = options.outWidth
+    var inSampleSize = 1
+    if (height > reqHeight || width > reqWidth) {
+        val halfHeight = height / 2
+        val halfWidth = width / 2
+        while (halfHeight / inSampleSize >= reqHeight && halfWidth / inSampleSize >= reqWidth) {
+            inSampleSize *= 2
+        }
+    }
+    return inSampleSize
+}
+
+private fun decodeSampledBitmap(bytes: ByteArray, maxDim: Int): android.graphics.Bitmap? {
+    val options = BitmapFactory.Options().apply {
+        inJustDecodeBounds = true
+    }
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+    options.inSampleSize = calculateInSampleSize(options, maxDim, maxDim)
+    options.inJustDecodeBounds = false
+    options.inPreferredConfig = android.graphics.Bitmap.Config.RGB_565
+    return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+}
+
 @Composable
-fun rememberDecryptedBitmap(photoPath: String): android.graphics.Bitmap? {
-    var bitmap by remember(photoPath) { mutableStateOf<android.graphics.Bitmap?>(null) }
-    LaunchedEffect(photoPath) {
+fun rememberDecryptedBitmap(photoPath: String, maxDimension: Int = 400): android.graphics.Bitmap? {
+    val cacheKey = "$photoPath:$maxDimension"
+    var bitmap by remember(cacheKey) { mutableStateOf(intruderBitmapCache.get(cacheKey)) }
+    LaunchedEffect(cacheKey) {
+        if (bitmap != null) return@LaunchedEffect
         withContext(Dispatchers.IO) {
             try {
                 val file = File(photoPath)
@@ -404,8 +433,13 @@ fun rememberDecryptedBitmap(photoPath: String): android.graphics.Bitmap? {
                     } catch (_: Exception) {
                         bytes
                     }
-                    val decoded = BitmapFactory.decodeByteArray(decryptedBytes, 0, decryptedBytes.size)
-                    bitmap = decoded
+                    if (decryptedBytes != null) {
+                        val decoded = decodeSampledBitmap(decryptedBytes, maxDimension)
+                        if (decoded != null) {
+                            intruderBitmapCache.put(cacheKey, decoded)
+                            bitmap = decoded
+                        }
+                    }
                 }
             } catch (e: Exception) {
                 if (BuildConfig.DEBUG) android.util.Log.e("IntruderLogsScreen", "Failed to decode photo: ${e.message}")

@@ -10,6 +10,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.pixelguard.applock.AppLockApplication
 import com.pixelguard.applock.R
+import com.pixelguard.applock.data.local.SecuritySnapshotManager
 import com.pixelguard.applock.data.model.LockPreferences
 import com.pixelguard.applock.data.model.isNotificationMasked
 import com.pixelguard.applock.domain.usecase.SessionManager
@@ -33,6 +34,21 @@ class NotificationShieldService : NotificationListenerService() {
 
     override fun onCreate() {
         super.onCreate()
+        // Synchronous fail-closed snapshot before any notification arrives (PG-SRV-04)
+        val snapshot = SecuritySnapshotManager.loadSnapshot(this)
+        if (snapshot != null) {
+            cachedLockedPackages = snapshot.lockedPackages
+            cachedPreferences = LockPreferences(
+                isNotificationShieldEnabled = snapshot.isNotificationShieldEnabled,
+                notificationExemptPackagesJson = snapshot.notificationExemptPackagesJson,
+                gracePeriodSeconds = snapshot.gracePeriodSeconds,
+                isScheduleEnabled = snapshot.isScheduleEnabled,
+                scheduleStartHour = snapshot.scheduleStartHour,
+                scheduleEndHour = snapshot.scheduleEndHour,
+                isPerAppGraceEnabled = snapshot.isPerAppGraceEnabled,
+                appGracePeriodsJson = snapshot.appGracePeriodsJson
+            )
+        }
         startObservingDataStore()
     }
 
@@ -197,7 +213,11 @@ class NotificationShieldService : NotificationListenerService() {
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification?) {
-        // No-op
+        val pkg = sbn?.packageName ?: return
+        if (pkg == applicationContext.packageName || sbn.isOngoing) return
+
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+        notificationManager?.cancel(pkg, sbn.id)
     }
 
     companion object {

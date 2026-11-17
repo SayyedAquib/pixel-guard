@@ -4,7 +4,7 @@
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0.21-7F52FF?style=flat&logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![UI](https://img.shields.io/badge/UI-Jetpack%20Compose%20%2F%20Material%203-4285F4?style=flat&logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
 [![APK Size](https://img.shields.io/badge/APK%20Size-3.3%20MB%20(R8%20Minified)-success?style=flat)](https://github.com)
-[![Tests](https://img.shields.io/badge/Unit%20Tests-169%20Passing-brightgreen?style=flat)](docs/TESTING.md)
+[![Tests](https://img.shields.io/badge/Unit%20Tests-188%20Passing-brightgreen?style=flat)](docs/TESTING.md)
 [![Architecture](https://img.shields.io/badge/Architecture-Clean%20%2F%20UDF-orange?style=flat)](docs/ARCHITECTURE.md)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=flat)](LICENSE)
 
@@ -75,7 +75,6 @@ app/src/main/java/com/pixelguard/applock/
 │   ├── camera/
 │   │   └── SilentCameraCapture.kt     # Headless front-camera capture via Camera2
 │   └── overlay/
-│       ├── OverlayWindowManager.kt    # WindowManager overlay coordinator
 │       └── LockOverlayScreen.kt       # Jetpack Compose lock screen & decoy dialog
 └── ui/
     ├── common/
@@ -159,11 +158,14 @@ Pixel Guard maintains a robust unit test suite covering critical cryptographic o
 ./gradlew testDebugUnitTest
 ```
 
-### Test Suite Breakdown (28 Passing Tests)
-| Test Suite | Tests | Scope |
-| :--- | :---: | :--- |
-| `CryptoManagerTest` | **9** | PBKDF2/SHA-256 key stretching (10,000 iterations), 16-byte random salt generation, constant-time verification, hex encoding, and empty input handling. |
-| `SessionManagerTest` | **19** | Transition grace buffers (preventing lock screen loops), per-app timeout expiration (`0s`, `30s`, `1m`, `5m`), schedule boundary math (e.g. 11 PM to 7 AM spanning midnight), temporary Quick Tile pause, and intruder failed attempt thresholds. |
+### Test Suite Breakdown (184 Passing Tests)
+| Test Suite | Scope |
+| :--- | :--- |
+| `CryptoManagerTest` | PBKDF2/SHA-256 PIN hashing, AES-256-GCM encryption/decryption, authenticated `enc:v1:` envelopes, AAD binding, tampering rejection, and offline recovery codes. |
+| `SessionManagerTest` | Transition grace buffers, per-app timeout expiration (`0s`, `30s`, `1m`, `5m`), schedule boundary math (e.g. 11 PM to 7 AM spanning midnight), temporary Quick Tile pause, and global lockout progression. |
+| `AppUsageDetectorTest` & `AppLockForegroundServiceTest` | Foreground package detection, system package filtering, launcher IPC caching, screen-off suspension, cold-start security snapshot preloading, and overlay permission guarding. |
+| `SilentCameraCaptureTest` | 10-second thermal cooldown, atomic concurrency lock, and hardware watchdog. |
+| Compose UI Test Suites | `MainScreenUiTest`, `SettingsScreenUiTest`, `OnboardingScreenUiTest`, `IntruderLogsScreenUiTest`, and `DualThemeContrastTest` (WCAG 2.1 AA/AAA contrast ratios). |
 
 ---
 
@@ -202,11 +204,13 @@ Detailed architecture specifications, governance, and design records are maintai
 
 - 📋 [**Product Requirements (PRD.md)**](docs/PRD.md) – User stories, problem statement, core features, and acceptance criteria.
 - 🎨 [**Design System (DESIGN.md)**](docs/DESIGN.md) – Material 3 & Material You design tokens, typography, and motion guidelines.
-- 🏛️ [**Architecture (ARCHITECTURE.md)**](docs/ARCHITECTURE.md) – Clean Architecture, UDF, and zero-latency accessibility interception.
+- 🏛️ [**Architecture (ARCHITECTURE.md)**](docs/ARCHITECTURE.md) – Clean Architecture, UDF, and banking-safe UsageStatsManager interception.
 - 📜 [**Engineering Rules (RULES.md)**](docs/RULES.md) – Coding conventions, forbidden patterns, and performance constraints.
 - 🧠 [**Project Memory (MEMORY.md)**](docs/MEMORY.md) – Session history, active hardware state, and roadmap status.
-- ⚖️ [**Architecture Decisions (DECISIONS.md)**](docs/DECISIONS.md) – Architecture Decision Records (ADRs 001–008).
+- ⚖️ [**Architecture Decisions (DECISIONS.md)**](docs/DECISIONS.md) – Architecture Decision Records (ADRs 001–060).
 - 🧪 [**Test Strategy (TESTING.md)**](docs/TESTING.md) – Quality assurance, unit testing plans, and verification checklists.
+- 🛡️ [**Privacy Policy (PRIVACY_POLICY.md)**](docs/PRIVACY_POLICY.md) – Zero-network offline privacy policy and permission disclosures.
+- 🚀 [**Store Submission Dossier (STORE_SUBMISSION.md)**](docs/STORE_SUBMISSION.md) – Google Play Android 14+ FGS specialUse declaration, Data Safety, and listing metadata.
 - 🤖 [**AI Agent Rules (AGENTS.md)**](AGENTS.md) – Autonomous agent constraints and development conventions.
 
 ---

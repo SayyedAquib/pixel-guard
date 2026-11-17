@@ -169,4 +169,97 @@ class CryptoManagerTest {
         val normalized = cryptoManager.normalizeRecoveryCode(raw)
         assertEquals("AB34CD56EF789012", normalized)
     }
+
+    @Test
+    fun encryptAndDecryptData_withTestSecretKey_roundtripsCorrectly() {
+        val keyGen = javax.crypto.KeyGenerator.getInstance("AES")
+        keyGen.init(256)
+        cryptoManager.testSecretKey = keyGen.generateKey()
+
+        val original = "PixelGuard-Secure-Payload-2026".toByteArray(Charsets.UTF_8)
+        val (encrypted, iv) = cryptoManager.encryptData(original)
+
+        assertNotNull(encrypted)
+        assertNotNull(iv)
+        assertFalse(original.contentEquals(encrypted))
+
+        val decrypted = cryptoManager.decryptData(encrypted, iv)
+        assertTrue(original.contentEquals(decrypted))
+    }
+
+    @Test(expected = SecurityException::class)
+    fun encryptData_withoutKeyStoreOrTestKey_throwsSecurityException() {
+        cryptoManager.testSecretKey = null
+        val payload = "test".toByteArray(Charsets.UTF_8)
+        cryptoManager.encryptData(payload)
+    }
+
+    @Test
+    fun encryptToFileBytes_andDecryptFromFileBytes_roundtripsCorrectly() {
+        val keyGen = javax.crypto.KeyGenerator.getInstance("AES")
+        keyGen.init(256)
+        cryptoManager.testSecretKey = keyGen.generateKey()
+
+        val sampleJpegBytes = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 0xE0.toByte(), 1, 2, 3, 4, 5)
+        val encryptedFileBytes = cryptoManager.encryptToFileBytes(sampleJpegBytes)
+
+        assertTrue(encryptedFileBytes.size >= 29)
+        val decrypted = cryptoManager.decryptFromFileBytes(encryptedFileBytes)
+        assertTrue(sampleJpegBytes.contentEquals(decrypted))
+    }
+
+    @Test
+    fun encryptString_producesEncV1Prefix_andDecryptStringRecoversOriginal() {
+        val keyGen = javax.crypto.KeyGenerator.getInstance("AES")
+        keyGen.init(256)
+        cryptoManager.testSecretKey = keyGen.generateKey()
+
+        val rawPinHash = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+        val encryptedEnvelope = cryptoManager.encryptString(rawPinHash, "pin_hash")
+
+        assertTrue(encryptedEnvelope.startsWith("enc:v1:"))
+        val recovered = cryptoManager.decryptString(encryptedEnvelope, "pin_hash")
+        assertEquals(rawPinHash, recovered)
+    }
+
+    @Test
+    fun encryptString_withDifferentAadTags_producesDifferentCiphertext() {
+        val keyGen = javax.crypto.KeyGenerator.getInstance("AES")
+        keyGen.init(256)
+        cryptoManager.testSecretKey = keyGen.generateKey()
+
+        val payload = "secret_pin"
+        val enc1 = cryptoManager.encryptString(payload, "context_a")
+        val enc2 = cryptoManager.encryptString(payload, "context_b")
+
+        assertNotEquals(enc1, enc2)
+    }
+
+    @Test(expected = javax.crypto.AEADBadTagException::class)
+    fun decryptString_withMismatchedAadContext_throwsAEADBadTagException() {
+        val keyGen = javax.crypto.KeyGenerator.getInstance("AES")
+        keyGen.init(256)
+        cryptoManager.testSecretKey = keyGen.generateKey()
+
+        val enc = cryptoManager.encryptString("secret_pin", "context_a")
+        cryptoManager.decryptString(enc, "wrong_context")
+    }
+
+    @Test(expected = SecurityException::class)
+    fun decryptString_rejectsUnauthenticatedPrefix() {
+        cryptoManager.decryptString("raw_unencrypted_pin", "pin_hash")
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun decryptFromFileBytes_rejectsTruncatedContainer() {
+        val truncated = ByteArray(20) // Less than minimum 29 bytes
+        cryptoManager.decryptFromFileBytes(truncated)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun decryptFromFileBytes_rejectsCorruptedIvLength() {
+        val invalidIv = ByteArray(35)
+        invalidIv[0] = 16 // Expected 12 for standard GCM IV
+        cryptoManager.decryptFromFileBytes(invalidIv)
+    }
 }

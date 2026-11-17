@@ -29,7 +29,11 @@ class AppLockRepositoryTest {
     fun setUp() {
         val context = RuntimeEnvironment.getApplication()
         dataStore = PreferencesDataStore(context)
-        cryptoManager = CryptoManager()
+        cryptoManager = CryptoManager().apply {
+            val keyGen = javax.crypto.KeyGenerator.getInstance("AES")
+            keyGen.init(256)
+            testSecretKey = keyGen.generateKey()
+        }
         repository = AppLockRepositoryImpl(context, dataStore, cryptoManager)
         SessionManager.resetFailedAttempts(context.packageName)
     }

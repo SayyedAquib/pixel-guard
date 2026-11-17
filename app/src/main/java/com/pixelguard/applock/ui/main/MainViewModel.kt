@@ -37,8 +37,14 @@ data class PermissionStatus(
         get() = hasUsagePermission && hasOverlayPermission
 }
 
-class MainViewModel(
-    private val repository: AppLockRepository = AppLockApplication.instance.repository
+class MainViewModel @JvmOverloads constructor(
+    private val repository: AppLockRepository = AppLockApplication.instance.repository,
+    private val permissionChecker: com.pixelguard.applock.data.permission.PermissionChecker =
+        try {
+            com.pixelguard.applock.data.permission.SystemPermissionChecker(AppLockApplication.instance)
+        } catch (_: Throwable) {
+            com.pixelguard.applock.data.permission.NoOpPermissionChecker
+        }
 ) : ViewModel() {
 
     private val _installedApps = MutableStateFlow<List<AppItem>>(emptyList())
@@ -414,24 +420,43 @@ class MainViewModel(
         }
     }
 
+    suspend fun verifySelfPin(pin: String): Boolean {
+        val appPkg = AppLockApplication.instance.packageName
+        if (com.pixelguard.applock.domain.usecase.SessionManager.isLockedOut(appPkg)) {
+            return false
+        }
+        val isCorrect = repository.verifyPin(pin)
+        if (isCorrect) {
+            com.pixelguard.applock.domain.usecase.SessionManager.resetFailedAttempts(appPkg)
+            return true
+        } else {
+            com.pixelguard.applock.domain.usecase.SessionManager.incrementFailedAttempts(appPkg)
+            return false
+        }
+    }
+
+    fun resetSelfFailedAttempts() {
+        com.pixelguard.applock.domain.usecase.SessionManager.resetFailedAttempts(AppLockApplication.instance.packageName)
+    }
+
+    fun isWeakPin(pin: String): Boolean {
+        return com.pixelguard.applock.data.local.CryptoManager.isWeakPin(pin)
+    }
+
     @androidx.annotation.VisibleForTesting
     var isTestingPermissions: Boolean = false
 
-    fun checkPermissions(context: Context) {
+    fun refreshPermissions() {
         if (isTestingPermissions) return
-        val hasOverlay = Settings.canDrawOverlays(context)
-        val usageGranted = com.pixelguard.applock.service.usage.AppUsageDetector.hasUsageStatsPermission(context)
-        val notificationEnabled = isNotificationServiceEnabled(context)
+        _permissionStatus.value = permissionChecker.checkPermissions()
+    }
 
-        _permissionStatus.value = PermissionStatus(
-            hasOverlayPermission = hasOverlay,
-            hasUsagePermission = usageGranted,
-            hasAccessibilityPermission = false,
-            hasNotificationPermission = notificationEnabled
-        )
-
-        if (usageGranted && hasOverlay) {
-            com.pixelguard.applock.service.AppLockForegroundService.start(context)
+    fun checkPermissions(context: Context? = null) {
+        refreshPermissions()
+        context?.let { ctx ->
+            if (_permissionStatus.value.isAllGranted) {
+                com.pixelguard.applock.service.AppLockForegroundService.start(ctx)
+            }
         }
     }
 
@@ -439,20 +464,5 @@ class MainViewModel(
     fun setPermissionStatusForTest(status: PermissionStatus) {
         isTestingPermissions = true
         _permissionStatus.value = status
-    }
-
-
-    private fun isNotificationServiceEnabled(context: Context): Boolean {
-        val flat = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners") ?: return false
-        val colonSplitter = TextUtils.SimpleStringSplitter(':')
-        colonSplitter.setString(flat)
-        while (colonSplitter.hasNext()) {
-            val componentNameString = colonSplitter.next()
-            val component = ComponentName.unflattenFromString(componentNameString)
-            if (component?.packageName == context.packageName) {
-                return true
-            }
-        }
-        return false
     }
 }

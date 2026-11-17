@@ -73,6 +73,18 @@ object AppUsageDetector {
         return KNOWN_SYSTEM_PACKAGES.contains(packageName)
     }
 
+    @Volatile
+    private var cachedDefaultLauncher: String? = null
+    @Volatile
+    private var lastLauncherQueryTime: Long = 0L
+    private const val LAUNCHER_CACHE_TTL_MS = 60_000L
+
+    @androidx.annotation.VisibleForTesting
+    fun clearLauncherCache() {
+        cachedDefaultLauncher = null
+        lastLauncherQueryTime = 0L
+    }
+
     /**
      * Identifies home launcher or recents UI packages.
      */
@@ -84,11 +96,19 @@ object AppUsageDetector {
             return true
         }
 
-        val homeIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
-        val defaultLauncher = try {
-            context.packageManager.resolveActivity(homeIntent, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName
-        } catch (_: Exception) {
-            null
+        val now = android.os.SystemClock.elapsedRealtime()
+        val defaultLauncher = if (cachedDefaultLauncher != null && now - lastLauncherQueryTime < LAUNCHER_CACHE_TTL_MS) {
+            cachedDefaultLauncher
+        } else {
+            val homeIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+            val resolved = try {
+                context.packageManager.resolveActivity(homeIntent, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName
+            } catch (_: Exception) {
+                null
+            }
+            cachedDefaultLauncher = resolved
+            lastLauncherQueryTime = now
+            resolved
         }
 
         return packageName == defaultLauncher

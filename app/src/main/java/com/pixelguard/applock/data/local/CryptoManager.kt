@@ -32,23 +32,15 @@ class CryptoManager {
     private fun getOrCreateKey(): SecretKey = synchronized(keyLock) {
         testSecretKey?.let { return it }
         val ks = keyStore
-        if (ks == null) {
-            val fallback = KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
-            testSecretKey = fallback
-            return fallback
-        }
+            ?: throw SecurityException(
+                "AndroidKeyStore unavailable. Device security hardware may be compromised or unsupported."
+            )
         val existingKey = try {
-            ks.getEntry(KEY_ALIAS, null) as? KeyStore.SecretKeyEntry
+            (ks.getEntry(KEY_ALIAS, null) as? KeyStore.SecretKeyEntry)?.secretKey
         } catch (_: Throwable) {
             null
         }
-        return existingKey?.secretKey ?: try {
-            createKey()
-        } catch (_: Throwable) {
-            val fallback = KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
-            testSecretKey = fallback
-            fallback
-        }
+        return existingKey ?: createKey()
     }
 
     private fun createKey(): SecretKey {
@@ -252,7 +244,8 @@ class CryptoManager {
 
     private fun base64Encode(bytes: ByteArray): String {
         return try {
-            android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+            val res = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+            res ?: java.util.Base64.getEncoder().encodeToString(bytes)
         } catch (_: Throwable) {
             java.util.Base64.getEncoder().encodeToString(bytes)
         }
@@ -260,7 +253,8 @@ class CryptoManager {
 
     private fun base64Decode(str: String): ByteArray {
         return try {
-            android.util.Base64.decode(str, android.util.Base64.NO_WRAP)
+            val res = android.util.Base64.decode(str, android.util.Base64.NO_WRAP)
+            res ?: java.util.Base64.getDecoder().decode(str)
         } catch (_: Throwable) {
             java.util.Base64.getDecoder().decode(str)
         }
@@ -269,7 +263,8 @@ class CryptoManager {
     companion object {
         private const val KEYSTORE_PROVIDER = "AndroidKeyStore"
         // NOTE: Do NOT rename KEY_ALIAS — changing it destroys existing users' stored keys.
-        private const val KEY_ALIAS = "pixel_app_lock_master_key"
+        internal const val KEY_ALIAS = "pixel_app_lock_master_key"
+        internal const val ENC_PREFIX = "enc:v1:"
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
         private const val PBKDF2_ITERATIONS = 200_000
         private const val PBKDF2_KEY_LENGTH_BITS = 256

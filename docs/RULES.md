@@ -2,7 +2,7 @@
 
 ## General Rules
 - Always preserve existing comments and documentation unrelated to code modifications.
-- Keep all code changes strictly within the user workspace (`a:/Development/app-lock/`).
+- Keep all code changes strictly within the user workspace (`a:/Development/pixel-guard/`).
 - Never perform main-thread blocking operations (disk IO, bitmap decoding, package queries).
 
 ## Code Organization
@@ -87,6 +87,8 @@
 - **O(1) In-Memory Lookups**: Parse JSON strings outside Lazy lists using `remember`; do not parse JSON inside row composables.
 - **Lazy Recycling**: Provide `key` and `contentType` parameters in all `LazyColumn` implementations.
 - **Memoization**: Memoize complex counts or filtered sub-lists with `remember(allApps)` to avoid repeated list iterations during scroll.
+- **Screen-Off Deep Sleep**: Foreground monitoring loops must cancel coroutines immediately on `ACTION_SCREEN_OFF` and resume on `ACTION_SCREEN_ON` to allow CPU deep sleep.
+- **Launcher Resolution Caching**: High-frequency polling loops must cache resolved default launcher package names with a TTL (60s) to eliminate unnecessary IPC binder overhead.
 
 ## Deployment & Build Rules
 - **Always Install Production (Release) Build**: Always compile and install the release build (`assembleRelease` -> `app-release.apk`) to target devices. Never deploy debug builds unless explicitly instructed by the user.
@@ -96,7 +98,10 @@
 - **DO NOT** leave temporary debug files, screencaps, or UI dumps in the workspace after work is completed.
 - **DO NOT** use `DEVICE_CREDENTIAL` in `BiometricPrompt.PromptInfo`.
 - **DO NOT** execute `app.icon.toBitmap()` synchronously inside `@Composable` functions.
-- **DO NOT** replace `AccessibilityService` with periodic `UsageStatsManager` polling loops.
+- **DO NOT** re-introduce `AccessibilityService` or `BIND_ACCESSIBILITY_SERVICE`—this triggers Google Pay, PhonePe, and UPI fraud blocks (use `UsageStatsManager` & `AppLockForegroundService` per ADR 056).
+- **DO NOT** use ephemeral in-memory fallback AES keys in production when `AndroidKeyStore` is unavailable (throw `SecurityException`).
+- **DO NOT** create long-lived application or service `CoroutineScope` instances without `SupervisorJob()`.
+- **DO NOT** omit `onNotificationRemoved` cancellation in `NotificationListenerService` (prevents orphaned/zombie notifications).
 - **DO NOT** request or add `android.permission.INTERNET` to the project manifest.
 - **DO NOT** hardcode non-theme colors for layout backgrounds or typography.
 - **DO NOT** hardcode default or fallback PIN strings (e.g. "1234") — enforce user onboarding setup.

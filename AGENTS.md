@@ -1,7 +1,7 @@
 # AGENTS.md
 
 ## Project Overview
-Pixel Guard is a native Android application locker developed in Kotlin and Jetpack Compose, specifically optimized for Google Pixel 9 running Android 17+. It provides zero-latency app interception via `AccessibilityService`, hardware-accelerated Compose overlays (`TYPE_APPLICATION_OVERLAY` & `LockActivity`), Titan M2 biometric integration (`BiometricPrompt`), and Material 3 / Material You dynamic theming.
+Pixel Guard is a native Android application locker developed in Kotlin and Jetpack Compose, specifically optimized for Google Pixel 9 running Android 17+. It provides zero-latency app interception via `UsageStatsManager` & `AppLockForegroundService`, hardware-accelerated Compose overlays (`TYPE_APPLICATION_OVERLAY` & `LockActivity`), Titan M2 biometric integration (`BiometricPrompt`), and Material 3 / Material You dynamic theming.
 
 ## Architecture Overview
 The project follows **Clean Architecture** and **Unidirectional Data Flow (UDF)**:
@@ -12,7 +12,7 @@ The project follows **Clean Architecture** and **Unidirectional Data Flow (UDF)*
 
 ## Repository Structure
 ```
-app-lock/
+pixel-guard/
 ├── app/
 │   ├── build.gradle.kts           # App-level build config, dependencies, target API 35
 │   └── src/main/
@@ -21,7 +21,7 @@ app-lock/
 │       │   ├── AppLockApplication.kt
 │       │   ├── data/              # Models, DataStore, Keystore Crypto, Repositories
 │       │   ├── domain/usecase/    # SessionManager, GracePeriod calculations
-│       │   ├── service/           # Accessibility, Overlay, Camera2, Notifications
+│       │   ├── service/           # Usage detection, Overlay, Camera2, Notifications
 │       │   └── ui/                # Main, Lock, Settings, Onboarding, Logs, Theme
 │       └── res/                   # Drawables, XML metadata, app icons
 ├── docs/                              # Project governance and specification docs
@@ -144,10 +144,10 @@ Before completing any task:
 
 
 ## Additional Documentation
-- [PRD.md](file:///a:/Development/app-lock/docs/PRD.md) - Product Requirements Document
-- [DESIGN.md](file:///a:/Development/app-lock/docs/DESIGN.md) - Design System & UI Specifications
-- [ARCHITECTURE.md](file:///a:/Development/app-lock/docs/ARCHITECTURE.md) - Technical Architecture & Data Flow
-- [RULES.md](file:///a:/Development/app-lock/docs/RULES.md) - Project Engineering Rules
-- [MEMORY.md](file:///a:/Development/app-lock/docs/MEMORY.md) - Session State & History
-- [DECISIONS.md](file:///a:/Development/app-lock/docs/DECISIONS.md) - Architecture Decision Records
-- [TESTING.md](file:///a:/Development/app-lock/docs/TESTING.md) - Test Strategy & Verification
+- [PRD.md](file:///a:/Development/pixel-guard/docs/PRD.md) - Product Requirements Document
+- [DESIGN.md](file:///a:/Development/pixel-guard/docs/DESIGN.md) - Design System & UI Specifications
+- [ARCHITECTURE.md](file:///a:/Development/pixel-guard/docs/ARCHITECTURE.md) - Technical Architecture & Data Flow
+- [RULES.md](file:///a:/Development/pixel-guard/docs/RULES.md) - Project Engineering Rules
+- [MEMORY.md](file:///a:/Development/pixel-guard/docs/MEMORY.md) - Session State & History
+- [DECISIONS.md](file:///a:/Development/pixel-guard/docs/DECISIONS.md) - Architecture Decision Records
+- [TESTING.md](file:///a:/Development/pixel-guard/docs/TESTING.md) - Test Strategy & Verification

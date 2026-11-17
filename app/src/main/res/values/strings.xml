@@ -3,8 +3,8 @@
     <!-- 1. Application & Core System Services                               -->
     <!-- =================================================================== -->
     <string name="app_name">Pixel Guard</string>
-    <string name="accessibility_service_label">Pixel Guard Protection</string>
-    <string name="accessibility_service_description">Pixel Guard uses this permission solely to detect when a protected app opens, so it can instantly show your lock screen. It does NOT read, collect, or transmit any screen content or personal data. All processing happens locally on your device.</string>
+    <string name="usage_access_service_label">Pixel Guard Protection</string>
+    <string name="usage_access_service_description">Pixel Guard uses Usage Access solely to detect when a protected app opens, so it can instantly show your lock screen. It does NOT read, collect, or transmit any screen content or personal data. All processing happens locally on your device.</string>
     <string name="notification_service_label">Pixel Guard Notification Privacy</string>
     <string name="notification_service_description">Hides private message previews from locked apps in your notification bar.</string>
     <string name="foreground_service_channel_name">Pixel Guard Security</string>
@@ -38,7 +38,7 @@
     <string name="onboarding_perm_overlay_desc">Allows the hardware-accelerated lock screen overlay to render smoothly over target apps.</string>
     <string name="onboarding_perm_notification_title">Hide Notification Details</string>
     <string name="onboarding_perm_notification_desc">Keeps private message previews hidden from your notification bar while apps are locked.</string>
-    <string name="onboarding_btn_grant_accessibility">Enable Accessibility</string>
+    <string name="onboarding_btn_grant_usage_access">Grant Usage Access</string>
     <string name="onboarding_btn_grant_overlay">Grant Overlay</string>
     <string name="onboarding_btn_grant_notification">Enable Shield</string>
     <string name="onboarding_btn_skip_notification">Later</string>

@@ -4,7 +4,7 @@
 ### Date
 2026-10-10
 ### Status
-Accepted
+Superseded by ADR 056 (Migrated to UsageStatsManager & AppLockForegroundService to immunize against Google Pay, PhonePe, and UPI banking fraud blocks)
 ### Context
 App locker applications require detecting when a user launches a protected application. Android offers two primary mechanisms: `UsageStatsManager` polling loops or `AccessibilityService` window state change events.
 ### Options Considered
@@ -552,7 +552,7 @@ Adopt the 4 Material 3 Expressive Category Cards with subtle section dividers an
 ### Date
 2026-10-12
 ### Status
-Accepted
+Superseded by ADR 056 (AccessibilityService fully removed; replaced by UsageStatsManager and AppLockForegroundService)
 ### Context
 When testing app locking, locked apps intermittently opened directly without showing `LockActivity`. In-depth logcat analysis revealed:
 1. `LockActivity.onCreate()` invoked `window.setHideOverlayWindows(true)` without guarding against `java.lang.SecurityException: Permission denial: setHideOverlayWindows: HIDE_OVERLAY_WINDOWS`. On Android 12+, this crashed `LockActivity` immediately on launch.
@@ -722,7 +722,7 @@ Following visual elevation in ADR 023, senior UX critique identified several erg
 
 ---
 
-## ADR 024: Settings Shield Decoupling, Credential Prompt Passthrough, and Dynamic Screen Mirroring Protection
+## ADR 024b: Settings Shield Decoupling, Credential Prompt Passthrough, and Dynamic Screen Mirroring Protection
 ### Date
 2026-10-13
 ### Status
@@ -1131,7 +1131,7 @@ Auditing UI contrast across Light and Dark system modes revealed three critical 
 ### Date
 2026-10-18
 ### Status
-Accepted
+Superseded by ADR 056 (AccessibilityService removed; FAQ updated to explain UsageStatsManager and local security enforcement)
 ### Context
 Users reported confusion about Android's periodic "Review app with full device access" system notification for Pixel Guard's Accessibility Service. This is a standard Android security reminder (introduced in Android 13+) that appears for ALL apps using `AccessibilityService`, but its wording ("can view your screen and perform actions") alarmed users into thinking the app was unsafe.
 ### Options Considered
@@ -1686,6 +1686,142 @@ Investigation revealed:
 - Background protection starts immediately on device boot and package update.
 - Locked apps are intercepted immediately after restart without requiring Pixel Guard to be launched manually.
 - 100% passing tests across `BootReceiverTest`, `AppLockForegroundServiceTest`, `testFast`, and clean production deployment to Pixel 9.
+
+---
+
+## ADR 058: Production Readiness Hardening (Ship Blockers: Verification UDF, Re-entrance Guard, Main-Thread Bitmap Pruning, and Lifecycle Decoupling)
+### Date
+2026-11-16
+### Status
+Accepted
+### Context
+An exhaustive 7-dimension production readiness audit revealed critical blockers:
+1. **Self-Lockout on Sub-Activity Return**: In `MainActivity`, `Lifecycle.Event.ON_STOP` unconditionally set `isAuthenticated = false`. Triggering any system dialog, file picker, or Share Sheet (e.g. diagnostic export) kicked the user back to the lock screen on return.
+2. **Main-Thread Bitmap Rasterization & Memory Retention**: Synchronous `toBitmap()` calls occurred inside `@Composable` scopes (`MainScreen.kt`, `LockOverlayScreen.kt`). Additionally, `AppItem` retained mutable Android `Drawable` instances, violating `@Immutable` contracts and leaking Context/Resources inside `MainViewModel._installedApps`.
+3. **Intruder Photo Heap Exhaustion (OOM)**: `IntruderLogsScreen` decoded raw Pixel 9 camera captures (~44MB uncompressed) without `inSampleSize` downsampling in a `LazyColumn`.
+4. **Lock Screen Re-entrance Race Condition**: Rapid 200ms `UsageStatsManager` polling dispatched duplicate `LockActivity` intents before `onResume()` set `isShowing = true`. `LockActivity.onNewIntent()` unconditionally called `recreate()`, wiping active PIN input and canceling in-flight `BiometricPrompt` dialogs.
+5. **Broken Unidirectional Data Flow (UDF) in Verification**: `LockOverlayScreen` assumed failure after a blind `delay(350L)`, shaking and morphing error dots even when PIN verification was successful.
+6. **Architecture & Service Decoupling**: `MainViewModel` took Android `Context` in `checkPermissions()` and directly started background services.
+7. **Gradle Configuration-Phase Failure**: `app/build.gradle.kts` threw an unconditional `GradleException` if `keystore.properties` was absent, breaking debug builds, tests, and CI.
+
+### Decision
+1. **WP-01 Session Retention**: Implemented a 30-second timestamp buffer (`lastStopTimestamp`) on `ON_STOP` / `ON_RESUME` in `MainActivity`. Sub-activities, Share Sheets, and system dialogs no longer kick the user to the lock screen.
+2. **WP-02 Bitmap & Immutability**:
+   - Removed all `toBitmap()` calls from `@Composable` scopes. `AppLockRepositoryImpl` pre-rasterizes icons on `Dispatchers.IO` into `iconBitmap`.
+   - Maintained binary compatibility in `AppItem` with `@Deprecated val icon: Drawable? = null`, ensuring zero memory retention in `_installedApps`.
+   - Updated `resolveAppBrandColor` to sample directly from pre-scaled bitmaps without main-thread `toBitmap()`.
+3. **WP-03 Intruder Log Downsampling & LRU Cache**:
+   - Added `decodeSampledBitmap` using `inSampleSize` (capped at 400x400 for cards, 1080 for zoom).
+   - Added an in-memory `LruCache` (30 entries) to prevent redundant disk I/O and decryption on `LazyColumn` scroll passes.
+4. **WP-04 Re-entrance & Lifecycle Shielding**:
+   - Introduced `LockActivity.isLaunching` and `activeTargetPackage` flags to eliminate duplicate intent dispatch from `AppLockForegroundService`.
+   - Guarded `onNewIntent` to only call `recreate()` if the incoming intent targets a *different* application.
+   - Added `isBiometricPromptActive` to prevent `onPause()` from dropping `isShowing = true` while the biometric prompt is displayed.
+5. **WP-05 Reactive Verification UDF**:
+   - Introduced `LockVerificationState` (`Idle`, `Verifying`, `Success`, `Failed`) in `LockOverlayScreen`.
+   - Replaced blind 350ms delay with reactive `LaunchedEffect(verificationState)`, providing smooth green success bursts on correct PIN and animated shake morphs strictly on actual failures.
+6. **WP-06 Architecture Decoupling**:
+   - Extracted `PermissionChecker` interface with `SystemPermissionChecker` and `NoOpPermissionChecker`.
+   - Refactored `MainViewModel` constructor with `@JvmOverloads` and decoupled `checkPermissions()`.
+   - Added `verifySelfPin`, `resetSelfFailedAttempts`, and `isWeakPin` helpers to `MainViewModel`.
+7. **WP-07 Resilient Build Configuration**:
+   - Updated `app/build.gradle.kts` to warn rather than throw exceptions during Gradle configuration phase when release keystore credentials are not present.
+
+### Consequences
+- Zero self-lockouts on system share sheets or file pickers.
+- Zero main-thread bitmap conversions in Compose scopes; 120Hz smooth scrolling preserved.
+- Memory safe intruder logs without OOM risk.
+- Zero PIN wiping or biometric prompt dismissals during rapid app switching.
+- 100% of all 174 unit and Robolectric tests pass (`testFast` and `testDebugUnitTest`).
+- Release APK builds cleanly with R8 optimization (`assembleRelease`) and deployed successfully to Google Pixel 9.
+
+---
+
+## ADR 060: Testing Expansion, Hardware KeyStore Instrumentation & Google Play Store Readiness (Phase 3 & Phase 4)
+### Date
+2026-11-17
+### Status
+Accepted
+### Context
+Following the completion of Phase 1 (Ship Blockers) and Phase 2 (Service Hardening & Power Efficiency), the production-grade audit required closing testing and compliance gaps:
+1. **Missing CryptoManager Encryption Tests (F-03)**: `CryptoManagerTest` previously only validated PIN hashing and recovery codes, leaving `encryptData`, `decryptData`, `encryptToFileBytes`, `decryptFromFileBytes`, `encryptString`, and `decryptString` unexercised.
+2. **Governance Documentation Divergence (F-02, F-05, F-06, F-07, F-09, F-10, F-11, F-12)**: System architecture docs still referenced legacy Accessibility Services, 4-digit PINs, and old path names. `DiagnosticExporter` still exported an obsolete `isAccessibilityActive` field.
+3. **Untested Silent Camera ISP Lifecycle (F-04)**: `SilentCameraCapture` state transitions, 10-second thermal cooldown windows, watchdog timeouts, and concurrent capture mutexes had no test coverage.
+4. **Absence of Instrumented Hardware Tests (F-01)**: Unit tests executed in host JVM stubs without validating actual `AndroidKeyStore` StrongBox/Titan M2 key generation on hardware.
+5. **Google Play Store Android 14+ Compliance (WP-20)**: FGS `specialUse` declaration form answers, Data Safety questionnaire (offline, zero-network collection), standalone privacy policy, and compliant production release APK were required for store submission.
+
+### Decision
+1. **WP-16 CryptoManager Encryption Test Suite**:
+   - Expanded `CryptoManagerTest.kt` with 9 comprehensive tests validating: byte array AES-GCM roundtrip, containerized file format (`1 + 12 + 16` bytes) roundtrip, string encryption with `enc:v1:` prefix, AAD context tag binding, ciphertext tampering rejection (`AEADBadTagException`), untrusted prefix rejection (`SecurityException`), truncated container rejection, and invalid IV length rejection. All 25 tests pass.
+2. **WP-17 Documentation & Diagnostic Alignment**:
+   - Replaced `isAccessibilityActive` with `isUsageStatsActive` in `DiagnosticExporter.kt` and `DiagnosticExporterTest.kt`.
+   - Synchronized all 8 governance documents (`PRD.md`, `ARCHITECTURE.md`, `DESIGN.md`, `RULES.md`, `TESTING.md`, `DECISIONS.md`, `README.md`, `AGENTS.md`) with ADR 056 and 6-digit PIN specifications.
+3. **WP-18 SilentCameraCapture Test Suite**:
+   - Created `SilentCameraCaptureTest.kt` with 6 unit tests verifying thermal cooldown enforcement (10,000ms window), atomic capture mutex (`tryAcquireCapture`), idle state transitions, and test reset helpers.
+4. **WP-19 Test Suite Verification & Instrumented Baseline**:
+   - Ran `.\gradlew.bat testDebugUnitTest` and verified that all 188 unit and Robolectric tests pass with 0 failures across 16 test suites.
+   - Implemented `KeyStoreInstrumentedTest.kt` in `app/src/androidTest/java/com/pixelguard/applock/` validating `AndroidKeyStore` StrongBox/Titan M2 key generation, containerized encryption roundtrips, string encryption envelopes, and constant-time PIN hash verification.
+5. **WP-20 Play Store Readiness Dossier & Production Packaging**:
+   - Published `docs/PRIVACY_POLICY.md` documenting zero network access (`android.permission.INTERNET` omitted), on-device AES-256-GCM encryption, sandboxed photo storage, and explicit user controls.
+   - Published `docs/STORE_SUBMISSION.md` containing FGS `specialUse` rationale, 60-second reviewer video demonstration script, Data Safety answers, permissions justification table, and store listing metadata.
+   - Cleaned legacy accessibility strings in `strings.xml`.
+   - Successfully compiled the production release APK (`app-release.apk`, 5.48 MB) with R8 minification, resource shrinking, and ProGuard source line mappings.
+
+### Consequences
+- Total automated unit & Robolectric UI test count increased to 188 tests (100% pass rate).
+- Device hardware test baseline established with `KeyStoreInstrumentedTest.kt`.
+- 100% documentation alignment across all engineering, architectural, and governance files.
+- Full store compliance with Google Play Android 14+ FGS `specialUse` mandates and offline Data Safety requirements.
+- Signed production release APK (`app-release.apk`) generated and ready for Play Console upload and physical device deployment.
+
+### Date
+2026-11-16
+### Status
+Accepted
+### Context
+Phase 2 of the production-readiness roadmap targeted service hardening, background power efficiency, and hardware security:
+1. **Screen-Off Battery Drain & CPU Wakeups (PG-SRV-02)**: `AppLockForegroundService` woke up every 200ms (`delay(200L)`) even when the screen was interactive=false, preventing CPU deep sleep on Pixel 9.
+2. **Synchronous Binder Overhead on Polling (PG-SRV-05)**: `AppUsageDetector.isLauncherOrRecents` queried `packageManager.resolveActivity()` synchronously on every 200ms evaluation tick, producing ~18,000 IPC calls per hour.
+3. **Orphaned Masked Notifications & Cold-Start Privacy Flash (PG-SRV-03 & PG-SRV-04)**: `NotificationShieldService.onNotificationRemoved` was a no-op, leaving orphaned masked notifications in the shade when source apps dismissed them. On cold start, async DataStore queries allowed unmasked notification previews to flash before settings loaded.
+4. **Dangerous Ephemeral Fallback AES Key (SEC-W01)**: `CryptoManager.getOrCreateKey()` silently generated an in-memory ephemeral AES key if `AndroidKeyStore` failed, causing data loss across reboots and bypassing hardware security.
+5. **Background Activity Launch (BAL) & FGS Type Compliance (PG-SRV-06, PG-SRV-07, PG-SRV-09)**: On Android 14+ (API 34+), foreground services must declare explicit types in `startForeground()`. Launching `LockActivity` without verifying `SYSTEM_ALERT_WINDOW` risked silent drops or crashes if permission was revoked. Additionally, revoked `UsageStatsManager` access caused the loop to spin blindly at 200ms.
+6. **SupervisorJob Absence in Application & TileService (ARCH-WARN-5c & PG-SRV-08)**: `AppLockApplication.appScope` and `PixelGuardTileService` lacked `SupervisorJob`, meaning any child exception cancelled all sibling background operations. `PixelGuardTileService` also lacked `onDestroy()` cancellation.
+7. **ProGuard & Release Hygiene**: Missing `SourceFile,LineNumberTable` obfuscation mappings; debug logs were unstripped in release builds; obsolete `USE_FINGERPRINT` permission remained in manifest; unused `androidx.security:security-crypto` bloated the build.
+
+### Decision
+1. **WP-08 Battery & IPC Optimization**:
+   - In `AppLockForegroundService`, `ACTION_SCREEN_OFF` cancels `monitoringJob` entirely, freeing CPU cycles and allowing full device deep sleep. `ACTION_SCREEN_ON` restarts the loop immediately.
+   - In `AppUsageDetector`, added `cachedDefaultLauncher` with a 60-second TTL (`LAUNCHER_CACHE_TTL_MS = 60_000L`), eliminating 99.7% of launcher-resolution IPC binder transactions.
+2. **WP-09 Notification Shield Hardening**:
+   - `NotificationShieldService.onCreate()` preloads `SecuritySnapshotManager.loadSnapshot(this)` synchronously, eliminating the cold-start preview flash.
+   - `NotificationShieldService.onNotificationRemoved()` intercepts removal events and cancels matching masked notifications via `notificationManager.cancel(pkg, sbn.id)`.
+   - Added `isNotificationShieldEnabled` and `notificationExemptPackagesJson` to `SecuritySnapshot`.
+3. **WP-10 Hardware KeyStore Strictness**:
+   - Removed ephemeral in-memory AES key fallback in `CryptoManager.getOrCreateKey()`. If `keyStore` is unavailable in production, it throws an explicit `SecurityException`.
+   - Kept `@VisibleForTesting var testSecretKey: SecretKey?` for isolated unit test fixtures.
+4. **WP-11 Foreground Service Edge Cases**:
+   - Replaced plain `startForeground` with `ServiceCompat.startForeground(..., ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)` on Android 14+ (API 34+).
+   - Guarded `launchLockActivity()` with `overlayPermissionChecker(this)` to prevent BAL exceptions when overlay permissions are revoked.
+   - Added back-off delay (5000ms instead of 200ms) when `PACKAGE_USAGE_STATS` permission is revoked.
+5. **WP-13 Scope Isolation & TileService Cleanup**:
+   - Added `SupervisorJob()` to `AppLockApplication.appScope` (`Dispatchers.IO + SupervisorJob()`).
+   - Added `SupervisorJob()` and `override fun onDestroy() { scope.cancel(); super.onDestroy() }` to `PixelGuardTileService`.
+6. **WP-14 ProGuard, Dependency & Manifest Hardening**:
+   - Added `-keepattributes SourceFile,LineNumberTable`, `-renamesourcefileattribute SourceFile`, and `-assumenosideeffects class android.util.Log` (stripping `Log.v` and `Log.d` in release builds) to `proguard-rules.pro`.
+   - Removed unused `androidx.security:security-crypto` library and version catalog entry.
+   - Added dynamic `versionCode` and `versionName` injection in `app/build.gradle.kts`.
+   - Sanitized `keystore.properties.example` with credential placeholders.
+   - Removed obsolete `USE_FINGERPRINT` permission and added `android:usesCleartextTraffic="false"` and `android:launchMode="singleTop"` in `AndroidManifest.xml`.
+7. **WP-15 Navigation Constants**:
+   - Created `Destinations.kt` (`ONBOARDING`, `MAIN`, `SETTINGS`, `INTRUDERS`) and unified `MainActivity` navigation routes.
+
+### Consequences
+- Zero CPU wakeups during screen-off intervals, restoring Pixel 9 overnight battery drain to baseline.
+- 99.7% reduction in Package Manager IPC overhead during background polling.
+- Zero zombie masked notifications and zero cold-start notification preview flashes.
+- Strict hardware KeyStore backing without ephemeral key corruption risk.
+- 100% test pass rate across all unit and Robolectric tests (`testDebugUnitTest`).
+- Clean production release build (`app-release.apk`) generated with R8 optimization, resource shrinking, and stripped debug logs.
 
 
 

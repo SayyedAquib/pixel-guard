@@ -8,6 +8,7 @@ import androidx.compose.runtime.Immutable
 data class AppItem(
     val packageName: String,
     val appName: String,
+    @Deprecated("Retained for binary compatibility; iconBitmap should be used instead")
     val icon: Drawable? = null,
     val iconBitmap: Bitmap? = null,
     val category: AppCategory = AppCategory.OTHER,

@@ -83,5 +83,16 @@ class AppUsageDetectorTest {
         assertThat(AppUsageDetector.isKnownSystemOrTransient("android")).isTrue()
         assertThat(AppUsageDetector.isKnownSystemOrTransient("com.instagram.android")).isFalse()
     }
+
+    @Test
+    fun isLauncherOrRecents_identifiesHardcodedLaunchersWithoutContextQuery() {
+        AppUsageDetector.clearLauncherCache()
+        // Mock context not needed for hardcoded launcher and SystemUI packages
+        val dummyContext = io.mockk.mockk<android.content.Context>(relaxed = true)
+        assertThat(AppUsageDetector.isLauncherOrRecents(dummyContext, "com.google.android.apps.nexuslauncher")).isTrue()
+        assertThat(AppUsageDetector.isLauncherOrRecents(dummyContext, "com.android.launcher3")).isTrue()
+        assertThat(AppUsageDetector.isLauncherOrRecents(dummyContext, "com.android.systemui")).isTrue()
+        assertThat(AppUsageDetector.isLauncherOrRecents(dummyContext, "com.google.android.systemui")).isTrue()
+    }
 }
 

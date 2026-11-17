@@ -9,6 +9,7 @@ import com.pixelguard.applock.data.local.PreferencesDataStore
 import com.pixelguard.applock.data.repository.AppLockRepositoryImpl
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -28,7 +29,7 @@ class AppLockApplication : Application() {
         repository = AppLockRepositoryImpl(applicationContext, dataStore)
         createNotificationChannels()
 
-        val appScope = CoroutineScope(Dispatchers.IO)
+        val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         appScope.launch {
             val attempts = dataStore.globalFailedAttemptsFlow.first()
             val wallClockExpiry = dataStore.globalLockoutWallClockTimestampFlow.first()

@@ -65,7 +65,9 @@ class AppLockRepositoryImpl(
                     scheduleEndHour = prefs.scheduleEndHour,
                     gracePeriodSeconds = prefs.gracePeriodSeconds,
                     isPerAppGraceEnabled = prefs.isPerAppGraceEnabled,
-                    appGracePeriodsJson = prefs.appGracePeriodsJson
+                    appGracePeriodsJson = prefs.appGracePeriodsJson,
+                    isNotificationShieldEnabled = prefs.isNotificationShieldEnabled,
+                    notificationExemptPackagesJson = prefs.notificationExemptPackagesJson
                 )
             }.collect { snapshot ->
                 com.pixelguard.applock.data.local.SecuritySnapshotManager.saveSnapshot(context, snapshot)
@@ -249,7 +251,7 @@ class AppLockRepositoryImpl(
             val category = categorizePackage(pkgName, resolveInfo.activityInfo.applicationInfo)
             val isLocked = currentLocked.contains(pkgName)
 
-            apps.add(AppItem(pkgName, appName, icon, iconBitmap, category, isLocked))
+            apps.add(AppItem(packageName = pkgName, appName = appName, iconBitmap = iconBitmap, category = category, isLocked = isLocked))
         }
 
         // Add Android Settings app specifically if not included in launcher list
@@ -264,7 +266,7 @@ class AppLockRepositoryImpl(
                 } catch (_: Exception) {
                     null
                 }
-                apps.add(AppItem(settingsPkg, label, icon, settingsBitmap, AppCategory.SYSTEM, currentLocked.contains(settingsPkg)))
+                apps.add(AppItem(packageName = settingsPkg, appName = label, iconBitmap = settingsBitmap, category = AppCategory.SYSTEM, isLocked = currentLocked.contains(settingsPkg)))
             } catch (_: Exception) {}
         }
 
@@ -544,7 +546,7 @@ class AppLockRepositoryImpl(
             securityPatch = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
                 android.os.Build.VERSION.SECURITY_PATCH
             } else "N/A",
-            isAccessibilityActive = true,
+            isUsageStatsActive = com.pixelguard.applock.service.usage.AppUsageDetector.hasUsageStatsPermission(context),
             isNotificationShieldActive = true,
             snapshot = snapshot,
             intruderRecordsCount = records,

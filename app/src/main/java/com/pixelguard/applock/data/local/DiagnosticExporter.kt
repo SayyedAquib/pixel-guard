@@ -19,7 +19,7 @@ class DiagnosticExporter(
         deviceModel: String,
         androidVersion: Int,
         securityPatch: String,
-        isAccessibilityActive: Boolean,
+        isUsageStatsActive: Boolean,
         isNotificationShieldActive: Boolean,
         snapshot: SecuritySnapshot?,
         intruderRecordsCount: Int,
@@ -41,7 +41,7 @@ class DiagnosticExporter(
         root.put("device", deviceObj)
 
         val securityObj = JSONObject().apply {
-            put("isAccessibilityActive", isAccessibilityActive)
+            put("isUsageStatsActive", isUsageStatsActive)
             put("isNotificationShieldActive", isNotificationShieldActive)
             put("isSettingsProtected", snapshot?.isSettingsProtected ?: false)
             put("isPlayStoreProtected", snapshot?.isPlayStoreProtected ?: false)

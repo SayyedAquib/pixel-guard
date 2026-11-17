@@ -152,7 +152,7 @@ sequenceDiagram
     else User Cancels / Biometrics Fail
         Bio-->>Lock: onAuthenticationError ("Use PIN")
         Lock-->>User: Displays Glassmorphic Keypad
-        User->>Lock: Enters 4-digit Master PIN
+        User->>Lock: Enters 6-digit Master PIN
         Lock->>Session: markAppUnlocked(pkg)
         Lock->>Lock: finish()
         Target-->>User: WhatsApp Accessible
@@ -183,8 +183,8 @@ sequenceDiagram
 - Deployed directly via USB debugging (`adb install -r -d`) or local Android package installer.
 
 ## Architecture Decisions
-- See [DECISIONS.md](file:///a:/Development/app-lock/docs/DECISIONS.md) for full context on architecture choices.
+- See [DECISIONS.md](file:///a:/Development/pixel-guard/docs/DECISIONS.md) for full context on architecture choices.
 
 ## Constraints
-- Requires user to explicitly enable Accessibility Service and Overlay permissions.
+- Requires user to explicitly enable Usage Access and Display Over Other Apps permissions.
 - On Android 17, requires navigating "Allow restricted settings" in App Info for sideloaded APKs.

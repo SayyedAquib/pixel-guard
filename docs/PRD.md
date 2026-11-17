@@ -43,18 +43,17 @@ Standard third-party Android app lockers suffer from four fatal flaws on modern 
 - **Initial Setup**: Install APK ➔ Launch Pixel Guard ➔ Review Required vs Optional permissions ➔ Enable App Detection (Usage Access) & Display Over Other Apps ➔ Set 6-digit Master PIN ➔ Main Dashboard unlocked.
 - **Protecting Apps**: Open Dashboard ➔ Tap category chip (e.g., Financial) ➔ Tap "Lock All" on the Category Action Strip ➔ Status indicator updates to protected.
 - **Unlocking an App**: Tap WhatsApp on Home screen ➔ Pixel Guard intercept activates ➔ Biometric prompt appears automatically ➔ Touch ultrasonic fingerprint sensor ➔ Overlay dismisses smoothly into WhatsApp.
-- **Fallback PIN Entry**: Biometrics fail or user taps "Use PIN" ➔ User enters custom 4-digit PIN on glassmorphic keypad ➔ App unlocks.
+- **Fallback PIN Entry**: Biometrics fail or user taps "Use PIN" ➔ User enters custom 6-digit PIN on glassmorphic keypad ➔ App unlocks.
 - **Intruder Detection**: Snooper enters wrong PIN 3 times ➔ Front camera silently takes photo without flash ➔ Photo logged in Intruder Records with timestamp.
 
 ## Future Features (Roadmap)
-- **Stealth Disguise Mode (Calculator Cloak)**: Disguise Pixel Guard launcher icon and name as a functional Calculator with secret passcode calculation entry.
 - **Trusted Wi-Fi Geofence**: Automatically pause protection when connected to verified Home Wi-Fi network.
 - **Encrypted Audit Log Export**: Export intruder selfies and security events as an AES-256 encrypted archive.
 
 ## Technical Constraints
 - Minimum SDK: Android 8.0 (API 26). Target & Compile SDK: Android 15 / 16 / 17 (API 35+).
 - Hardware Requirement: Android device with Biometric BiometricManager.Authenticators.BIOMETRIC_STRONG (optimized for Pixel 9 series).
-- Permissions Required: `SYSTEM_ALERT_WINDOW`, `BIND_ACCESSIBILITY_SERVICE`, `CAMERA`, `POST_NOTIFICATIONS`, `BIND_NOTIFICATION_LISTENER_SERVICE` (optional).
+- Permissions Required: `SYSTEM_ALERT_WINDOW`, `PACKAGE_USAGE_STATS`, `CAMERA`, `POST_NOTIFICATIONS`, `BIND_NOTIFICATION_LISTENER_SERVICE` (optional).
 
 ## Success Metrics
 - **Frame Render Budget**: 0 dropped frames during 120Hz fling scroll (<8.33ms per frame).
@@ -67,5 +66,5 @@ Standard third-party Android app lockers suffer from four fatal flaws on modern 
 - [x] Zero-tap biometric prompt fires automatically upon opening any locked app.
 - [x] Cancelling biometrics leaves the custom PIN keypad active without closing the app.
 - [x] Device lockscreen passcode cannot unlock Pixel Guard (only Master PIN or Biometrics).
-- [x] Setup permission screen clearly marks Overlay/Accessibility as Required and Notification as Optional.
+- [x] Setup permission screen clearly marks Overlay/Usage Access as Required and Notification as Optional.
 - [x] Main app list scrolls smoothly at 120Hz on Google Pixel 9 display.

@@ -48,3 +48,18 @@
 # 5. Jetpack Compose UI Stability
 # ------------------------------------------------------------------------------
 -keepclassmembers class * implements androidx.compose.runtime.State { *; }
+
+# ------------------------------------------------------------------------------
+# 6. Crash De-obfuscation & Stack Trace Line Numbers
+# ------------------------------------------------------------------------------
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
+
+# ------------------------------------------------------------------------------
+# 7. Release Log Stripping (Defense-in-Depth)
+# ------------------------------------------------------------------------------
+-assumenosideeffects class android.util.Log {
+    public static boolean isLoggable(java.lang.String, int);
+    public static int v(...);
+    public static int d(...);
+}

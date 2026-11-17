@@ -12,13 +12,20 @@ import com.pixelguard.applock.domain.usecase.SessionManager
 import com.pixelguard.applock.ui.lock.LockActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 @RequiresApi(Build.VERSION_CODES.N)
 class PixelGuardTileService : TileService() {
 
-    private val scope = CoroutineScope(Dispatchers.Main)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    override fun onDestroy() {
+        scope.cancel()
+        super.onDestroy()
+    }
 
     override fun onStartListening() {
         super.onStartListening()

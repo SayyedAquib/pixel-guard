@@ -33,6 +33,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
 import com.pixelguard.applock.service.overlay.LockOverlayScreen
 import com.pixelguard.applock.ui.logs.IntruderLogsScreen
+import com.pixelguard.applock.ui.navigation.Destinations
 import com.pixelguard.applock.ui.onboarding.OnboardingScreen
 import com.pixelguard.applock.ui.settings.SettingsScreen
 import com.pixelguard.applock.ui.theme.PixelAppLockTheme
@@ -133,6 +134,8 @@ fun AppLockRoot(
     val permissionStatus by viewModel.permissionStatus.collectAsState()
     val isPinConfigured by viewModel.hasPinSet.collectAsState()
     var isAuthenticated by remember { mutableStateOf(false) }
+    var lastStopTimestamp by remember { mutableStateOf(0L) }
+    val selfLockThresholdMs = 30_000L
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
 
     val prefs by viewModel.preferences.collectAsState()
@@ -149,15 +152,23 @@ fun AppLockRoot(
     DisposableEffect(lifecycleOwner, isPinConfigured, allowBio) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) {
-                if (isPinConfigured == true) {
-                    isAuthenticated = false
-                }
+                lastStopTimestamp = android.os.SystemClock.elapsedRealtime()
             } else if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
-                if (isPinConfigured == true && !isAuthenticated && allowBio) {
-                    onPromptBiometric(
-                        { isAuthenticated = true },
-                        { /* user cancelled, stays on PIN screen */ }
-                    )
+                if (isPinConfigured == true) {
+                    val elapsed = if (lastStopTimestamp > 0L) {
+                        android.os.SystemClock.elapsedRealtime() - lastStopTimestamp
+                    } else {
+                        0L
+                    }
+                    if (lastStopTimestamp > 0L && elapsed > selfLockThresholdMs) {
+                        isAuthenticated = false
+                    }
+                    if (!isAuthenticated && allowBio) {
+                        onPromptBiometric(
+                            { isAuthenticated = true },
+                            { /* user cancelled, stays on PIN screen */ }
+                        )
+                    }
                 }
             }
         }
@@ -174,7 +185,7 @@ fun AppLockRoot(
         }
     }
 
-    val startDestination = if (permissionStatus.isAllGranted && isPinConfigured == true) "main" else "onboarding"
+    val startDestination = if (permissionStatus.isAllGranted && isPinConfigured == true) Destinations.MAIN else Destinations.ONBOARDING
 
     Box(
         modifier = Modifier
@@ -196,12 +207,14 @@ fun AppLockRoot(
         }
 
         if (!isAuthenticated && isPinConfigured == true) {
-            val repository = AppLockApplication.instance.repository
             val scope = rememberCoroutineScope()
+            var verificationState by remember { mutableStateOf(com.pixelguard.applock.service.overlay.LockVerificationState.Idle) }
             LockOverlayScreen(
                 targetPackage = context.packageName,
                 targetAppName = "Pixel Guard",
                 targetIcon = null,
+                targetIconBitmap = null,
+                verificationState = verificationState,
                 isDecoyEnabled = false,
                 isBiometricEnabled = allowBio,
                 isHapticsEnabled = prefs.isHapticsEnabled,
@@ -213,7 +226,7 @@ fun AppLockRoot(
                         onPromptBiometric(
                             {
                                 hapticManager.unlockSuccess(prefs.isHapticsEnabled)
-                                com.pixelguard.applock.domain.usecase.SessionManager.resetFailedAttempts(context.packageName)
+                                viewModel.resetSelfFailedAttempts()
                                 isAuthenticated = true
                             },
                             { /* user cancelled, stays on PIN screen */ }
@@ -221,18 +234,15 @@ fun AppLockRoot(
                     }
                 },
                 onPinSubmitted = { pin ->
+                    verificationState = com.pixelguard.applock.service.overlay.LockVerificationState.Verifying
                     scope.launch {
-                        if (com.pixelguard.applock.domain.usecase.SessionManager.isLockedOut(context.packageName)) {
-                            hapticManager.authFailed(prefs.isHapticsEnabled)
-                            return@launch
-                        }
-                        val isCorrect = repository.verifyPin(pin)
+                        val isCorrect = viewModel.verifySelfPin(pin)
                         if (isCorrect) {
+                            verificationState = com.pixelguard.applock.service.overlay.LockVerificationState.Success
                             hapticManager.unlockSuccess(prefs.isHapticsEnabled)
-                            com.pixelguard.applock.domain.usecase.SessionManager.resetFailedAttempts(context.packageName)
                             isAuthenticated = true
                         } else {
-                            com.pixelguard.applock.domain.usecase.SessionManager.incrementFailedAttempts(context.packageName)
+                            verificationState = com.pixelguard.applock.service.overlay.LockVerificationState.Failed
                             hapticManager.authFailed(prefs.isHapticsEnabled)
                         }
                     }
@@ -246,34 +256,34 @@ fun AppLockRoot(
                 navController = navController,
                 startDestination = startDestination
             ) {
-            composable("onboarding") {
+            composable(Destinations.ONBOARDING) {
                 OnboardingScreen(
                     viewModel = viewModel,
                     onComplete = {
-                        navController.navigate("main") {
-                            popUpTo("onboarding") { inclusive = true }
+                        navController.navigate(Destinations.MAIN) {
+                            popUpTo(Destinations.ONBOARDING) { inclusive = true }
                         }
                     }
                 )
             }
 
-            composable("main") {
+            composable(Destinations.MAIN) {
                 MainScreen(
                     viewModel = viewModel,
-                    onNavigateToSettings = { navController.navigate("settings") },
-                    onNavigateToIntruders = { navController.navigate("intruders") },
-                    onNavigateToPermissions = { navController.navigate("onboarding") }
+                    onNavigateToSettings = { navController.navigate(Destinations.SETTINGS) },
+                    onNavigateToIntruders = { navController.navigate(Destinations.INTRUDERS) },
+                    onNavigateToPermissions = { navController.navigate(Destinations.ONBOARDING) }
                 )
             }
 
-            composable("settings") {
+            composable(Destinations.SETTINGS) {
                 SettingsScreen(
                     viewModel = viewModel,
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
 
-            composable("intruders") {
+            composable(Destinations.INTRUDERS) {
                 IntruderLogsScreen(
                     viewModel = viewModel,
                     onNavigateBack = { navController.popBackStack() }

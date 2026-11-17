@@ -16,7 +16,9 @@ data class SecuritySnapshot(
     val scheduleEndHour: Int = 7,
     val gracePeriodSeconds: Int = 0,
     val isPerAppGraceEnabled: Boolean = true,
-    val appGracePeriodsJson: String = "{}"
+    val appGracePeriodsJson: String = "{}",
+    val isNotificationShieldEnabled: Boolean = true,
+    val notificationExemptPackagesJson: String = "[]"
 )
 
 object SecuritySnapshotManager {
@@ -42,7 +44,9 @@ object SecuritySnapshotManager {
                 scheduleEndHour = json.optInt("scheduleEndHour", 7),
                 gracePeriodSeconds = json.optInt("gracePeriodSeconds", 0),
                 isPerAppGraceEnabled = json.optBoolean("isPerAppGraceEnabled", true),
-                appGracePeriodsJson = json.optString("appGracePeriodsJson", "{}")
+                appGracePeriodsJson = json.optString("appGracePeriodsJson", "{}"),
+                isNotificationShieldEnabled = json.optBoolean("isNotificationShieldEnabled", true),
+                notificationExemptPackagesJson = json.optString("notificationExemptPackagesJson", "[]")
             )
         } catch (_: Exception) {
             null
@@ -62,6 +66,8 @@ object SecuritySnapshotManager {
                 put("gracePeriodSeconds", snapshot.gracePeriodSeconds)
                 put("isPerAppGraceEnabled", snapshot.isPerAppGraceEnabled)
                 put("appGracePeriodsJson", snapshot.appGracePeriodsJson)
+                put("isNotificationShieldEnabled", snapshot.isNotificationShieldEnabled)
+                put("notificationExemptPackagesJson", snapshot.notificationExemptPackagesJson)
             }
             tempFile = File(context.filesDir, "$SNAPSHOT_FILE.${java.util.UUID.randomUUID()}.tmp")
             val targetFile = File(context.filesDir, SNAPSHOT_FILE)

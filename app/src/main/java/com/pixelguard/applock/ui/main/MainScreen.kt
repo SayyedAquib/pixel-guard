@@ -130,7 +130,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
 import com.pixelguard.applock.R
-import androidx.core.graphics.drawable.toBitmap
 import com.pixelguard.applock.data.model.AppCategory
 import com.pixelguard.applock.data.model.AppItem
 import com.pixelguard.applock.data.model.AppSortOrder
@@ -1025,15 +1024,6 @@ fun AppSecurityProfileSheetContent(
             if (target.iconBitmap != null) {
                 Image(
                     bitmap = target.iconBitmap.asImageBitmap(),
-                    contentDescription = target.appName,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                )
-            } else if (target.icon != null) {
-                val bmp = remember(target.icon) { target.icon.toBitmap() }
-                Image(
-                    bitmap = bmp.asImageBitmap(),
                     contentDescription = target.appName,
                     modifier = Modifier
                         .size(48.dp)
@@ -1971,15 +1961,6 @@ fun AppListItem(
                 if (app.iconBitmap != null) {
                     Image(
                         bitmap = app.iconBitmap.asImageBitmap(),
-                        contentDescription = app.appName,
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                    )
-                } else if (app.icon != null) {
-                    val bitmap = remember(app.icon) { app.icon.toBitmap() }
-                    Image(
-                        bitmap = bitmap.asImageBitmap(),
                         contentDescription = app.appName,
                         modifier = Modifier
                             .size(44.dp)

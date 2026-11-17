@@ -36,6 +36,7 @@ class AppLockForegroundServiceTest {
 
         controller = Robolectric.buildService(AppLockForegroundService::class.java)
         service = controller.create().get()
+        service.overlayPermissionChecker = { true }
 
         service.setCachedLockedPackagesForTest(setOf(instagramPackage, bankPackage))
         service.setCachedPreferencesForTest(
@@ -160,6 +161,7 @@ class AppLockForegroundServiceTest {
 
             val freshController = Robolectric.buildService(AppLockForegroundService::class.java)
             val freshService = freshController.create().get()
+            freshService.overlayPermissionChecker = { true }
 
             val triggered = freshService.processForegroundPackage("com.example.secret")
             assertThat(triggered).isTrue()
@@ -170,6 +172,17 @@ class AppLockForegroundServiceTest {
             freshController.destroy()
             repo.setAppLocked("com.example.secret", false)
         }
+    }
+
+    @Test
+    fun overlayPermissionRevoked_doesNotLaunchLockActivity() {
+        service.overlayPermissionChecker = { false }
+
+        val triggered = service.processForegroundPackage(instagramPackage)
+
+        assertThat(triggered).isFalse()
+        val shadowService = shadowOf(service)
+        assertThat(shadowService.nextStartedActivity).isNull()
     }
 }
 

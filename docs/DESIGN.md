@@ -10,7 +10,7 @@ Pixel Guard is designed around **Google Material You (Material 3)** with a deep 
 - **Tactile Depth**: Subtle borders (`1dp outlineVariant`), high corner radiuses (`16dp`–`24dp`), and glassmorphism without heavy drop shadows.
 
 ## Colors & Theming Architecture
-Defined in [`Color.kt`](file:///a:/Development/app-lock/app/src/main/java/com/pixelguard/applock/ui/theme/Color.kt) and [`Theme.kt`](file:///a:/Development/app-lock/app/src/main/java/com/pixelguard/applock/ui/theme/Theme.kt):
+Defined in [`Color.kt`](file:///a:/Development/pixel-guard/app/src/main/java/com/pixelguard/applock/ui/theme/Color.kt) and [`Theme.kt`](file:///a:/Development/pixel-guard/app/src/main/java/com/pixelguard/applock/ui/theme/Theme.kt):
 
 ### Material 3 Dark & Light Palette
 | Token | Dark Hex | Light Hex | Role |
@@ -47,7 +47,7 @@ $$\text{Luminance } L = 0.2126 \cdot R + 0.7152 \cdot G + 0.0722 \cdot B$$
 This mathematically guarantees $\ge 4.5:1$ contrast against any installed app's brand theme.
 
 ## Typography
-Defined in [`Type.kt`](file:///a:/Development/app-lock/app/src/main/java/com/pixelguard/applock/ui/theme/Type.kt) adhering to Material 3 scale with **Tabular Figures (`fontFeatureSettings = "tnum"`)** enabled for stable numeric glyph spacing:
+Defined in [`Type.kt`](file:///a:/Development/pixel-guard/app/src/main/java/com/pixelguard/applock/ui/theme/Type.kt) adhering to Material 3 scale with **Tabular Figures (`fontFeatureSettings = "tnum"`)** enabled for stable numeric glyph spacing:
 - **Headline Large (`32sp / 40sp`, Bold)**: Screen titles (e.g., "Pixel Guard").
 - **Headline Medium (`26sp / 32sp`, SemiBold)**: Target app lock titles.
 - **Headline Small (`22sp / 28sp`, SemiBold)**: Sub-section headers.
@@ -99,8 +99,8 @@ Standard 4dp/8dp grid system:
 
 ### Forms
 - **Search Bar (`OutlinedTextField`)**: `singleLine = true`, `RoundedCornerShape(24.dp)`, leading search icon and trailing clear `IconButton`.
-- **Numeric Keypad**: 4 rows (`1-3`, `4-6`, `7-9`, `bio/0/del`) with instant 4-digit verification.
-- **Passcode Setup Inputs**: Dual `OutlinedTextField` inputs (`Enter 4-Digit Passcode` & `Confirm 4-Digit Passcode`) with `PasswordVisualTransformation()`, chained `ImeAction.Next` ➔ `ImeAction.Done` keyboard navigation, wrapped in a scrollable `Modifier.imePadding()` container with automatic animated scroll-into-view behavior to prevent soft keyboard occlusion.
+- **Numeric Keypad**: 4 rows (`1-3`, `4-6`, `7-9`, `bio/0/del`) with instant 6-digit verification.
+- **Passcode Setup Inputs**: Dual `OutlinedTextField` inputs (`Enter 6-Digit Passcode` & `Confirm 6-Digit Passcode`) with `PasswordVisualTransformation()`, chained `ImeAction.Next` ➔ `ImeAction.Done` keyboard navigation, wrapped in a scrollable `Modifier.imePadding()` container with automatic animated scroll-into-view behavior to prevent soft keyboard occlusion.
 
 ### Cards
 - **`AppListItem`**: Card with `containerColor = surfaceVariant.copy(alpha = 0.35f)`, subtle `1dp outlineVariant` stroke on locked state, 44dp icon container, title, category, unified drill-down security capsule (`[ 🔑 PIN • $graceBadge › ]`), and trailing upright shackle spring bounce toggle (`-3dp` displacement, `0.92f` scale pulse).
@@ -109,7 +109,7 @@ Standard 4dp/8dp grid system:
   - *Header Row*: 40dp circular tonal icon disc (`primaryContainer` with `onPrimaryContainer` tint for crisp contrast), title with guaranteed single-line stability (hides redundant `[Required]` badge once granted), and top-right `(v) Active` badge in soft pastel pill (`primary.copy(alpha = 0.12f)` container + `primary` text).
   - *Body*: 52dp-indented description aligned cleanly beneath the title column (clamped to `maxLines = 1` when granted to save ~64dp of viewport height).
   - *Actions*: Bottom-right action row (`Later` text button + `Enable` filled button; or `OutlinedButton` when skipped). Eliminates horizontal crowding and guarantees 100% badge visibility.
-- **`Setup Permissions Primary Action Button`**: 52dp prominent action button dynamically reflecting the zero-trust single-permission architecture (`"Grant Accessibility Permission"` ➔ `"Continue to App Lock"`). Fully actionable across all states, directly navigating the user to the Accessibility settings screen if ungranted, or advancing setup once enabled. Overlay permission (`SYSTEM_ALERT_WINDOW`) has been completely eradicated from the system.
+- **`Setup Permissions Primary Action Button`**: 52dp prominent action button dynamically reflecting permission onboarding state (`"Grant Usage Access"` ➔ `"Grant Overlay Permission"` ➔ `"Continue to App Lock"`). Fully actionable across all states, directly navigating the user to the relevant settings screens if ungranted, or advancing setup once enabled.
 - **`SettingsCard`**: 18dp container with `surfaceContainer` tint, `1dp outlineVariant` border stroke, 32dp header icon disc, and 36dp tonal row icon discs.
 - **`Actionable Hero Banner` (Settings)**: Interactive security status card ("Your Apps are Protected") that detects unconfigured protections (e.g. Lock Phone Settings, Hide in App Switcher) and auto-scrolls down to the offending controls upon tap.
 - **`Hide in App Switcher & Screen Mirroring`**: Toggles `FLAG_SECURE` dynamically on `MainActivity`, `LockActivity`, and system overlays. When disabled (default), enables full laptop screen mirroring via `scrcpy` and local screenshots. When enabled, strictly enforces hardware-level SurfaceFlinger blanking so apps remain hidden when switching apps.

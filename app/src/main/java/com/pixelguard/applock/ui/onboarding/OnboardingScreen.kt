@@ -767,13 +767,25 @@ private fun openUsageAccessSettings(context: Context) {
 }
 
 private fun openNotificationListenerSettings(context: Context) {
-    val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
-    context.startActivity(intent)
+    try {
+        val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+        context.startActivity(intent)
+    } catch (_: Exception) {
+        try {
+            context.startActivity(Intent(Settings.ACTION_SETTINGS))
+        } catch (_: Exception) {}
+    }
 }
 
 private fun openAppInfo(context: Context) {
-    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-        data = Uri.fromParts("package", context.packageName, null)
+    try {
+        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            data = Uri.fromParts("package", context.packageName, null)
+        }
+        context.startActivity(intent)
+    } catch (_: Exception) {
+        try {
+            context.startActivity(Intent(Settings.ACTION_SETTINGS))
+        } catch (_: Exception) {}
     }
-    context.startActivity(intent)
 }

@@ -16,9 +16,9 @@ Pixel Guard enforces a pragmatic, high-assurance testing strategy. Because it is
   - `io.mockk:mockk:1.13.13`: Kotlin-first mocking for Android platform components and context services.
 - **Device Hardware Testing**: Android Debug Bridge (ADB) via PowerShell on Google Pixel 9 (Android 17, 120Hz display).
 
-## Test Suite Structure (164 Total Tests, 100% Passing)
+## Test Suite Structure (188 Total Tests, 100% Passing)
 
-### 1. Presentation & Compose UI Tests (58 tests)
+### 1. Presentation & Compose UI Tests (62 tests)
 All UI tests run via Compose UI Rule + Robolectric on the JVM with exact Pixel 9 display metrics:
 - **`MainScreenUiTest`** (19 tests):
   - TopAppBar header, Titan M2 armor branding, and Intruder selfie count badge.
@@ -80,18 +80,21 @@ All UI tests run via Compose UI Rule + Robolectric on the JVM with exact Pixel 9
   - Batch "Clear All" confirmation dialog and record clearance.
   - Photo preview modal dialog opening and closing with pinch-to-zoom evidence viewer.
   - Back navigation callback.
-- **`DualThemeContrastTest`** (2 tests):
+- **`DualThemeContrastTest`** (8 tests):
   - Verification of WCAG 2.1 AA/AAA contrast ratios across light and dark theme surfaces.
+  - Mathematical relative luminance contrast ratio verification on alerts and buttons.
+  - Legible rendering checks across `MainScreen`, `SettingsScreen`, and `OnboardingScreen` in both light and dark modes.
 
-### 2. Unit, Domain, Repository & Service Tests (106 tests)
+### 2. Unit, Domain, Repository & Service Tests (126 tests)
 Unit and service tests validate cryptography, rate limiting, background interception resilience, and data persistence:
-- **`CryptoManagerTest`** (15 tests):
+- **`CryptoManagerTest`** (25 tests):
   - PBKDF2/SHA-256 (200k iterations) hashing and constant-time verification.
   - Strict `Locale.ROOT` byte-array-to-hex and hex-to-byte-array transformations (H-2).
   - Weak-PIN detection rejecting repeating digits ("000000", "111111"), sequential digits ("123456", "654321"), repeating 2/3-digit sequences, and common blocklist PINs (H-1).
   - 16-character unambiguous base32 recovery key generation and normalization (H-3).
   - Authenticated storage envelope encryption and decryption with Associated Authenticated Data (AAD: `pin_hash`, `pin_salt`, `recovery_hash`, `recovery_salt`) (M-10).
-  - Rejection of unauthenticated or tampered ciphertext envelopes.
+  - AES-256-GCM binary container encryption/decryption round-trip (`encryptToFileBytes`, `decryptFromFileBytes`).
+  - Strict tamper rejection, corrupted IV rejection, and missing key SecurityException validation.
 - **`DiagnosticExporterTest`** (5 tests):
   - Sanitized diagnostic payload generation: verifies all values are non-empty and contains zero package names, credentials, salts, or hashes.
   - PBKDF2 + AES-256-GCM containerized encryption format (`PGDIAG01`) with salt and IV headers.
@@ -109,7 +112,7 @@ Unit and service tests validate cryptography, rate limiting, background intercep
   - Clock tampering defense (`syncPersistedLockout`): clamps forward clock jumps to 300s max penalty and preserves remaining duration on backward roll (M-11).
   - Grace period math (immediate 15s quick-switch buffer, screen-off relock, per-app overrides).
   - Night lockdown schedule enforcement and pin-only mode override.
-- **`AppUsageDetectorTest` & `AppLockForegroundServiceTest`** (15 tests):
+- **`AppUsageDetectorTest` & `AppLockForegroundServiceTest`** (16 tests):
   - Foreground package resolution from `UsageEvents` records (`resolveResumedPackage`).
   - Target lock evaluation (`isTargetLocked`) and known system / transient exclusions.
   - Synchronous disk snapshot loading via `SecuritySnapshotManager` (C-2).
@@ -118,13 +121,21 @@ Unit and service tests validate cryptography, rate limiting, background intercep
   - Whitelist immunity for launcher (`com.google.android.apps.nexuslauncher`), recents, and transient system UI.
   - Screen-off broadcast receiver session revocation and polling suspension (`BAT-002`).
   - Screen-on evaluation resumption.
-- **`SilentCameraCaptureTest`** (3 tests, `BAT-001`):
+  - Overlay permission check before activity launches.
+- **`SilentCameraCaptureTest`** (6 tests, `BAT-001`):
   - Cooldown window enforcement (10-second thermal delay between intruder photo attempts).
   - Hardware concurrency mutex (`isCapturing`) preventing overlapping Camera2 / ISP sessions during rapid failed PIN attempts.
-- **`SessionManagerTest`** (27 tests): Grace period math, Night Lockdown scheduling boundaries, per-app priority, flicker buffer protection, active foreground session retention during continuous in-app usage, exit-based grace countdown, absolute screen-off all-session revocation, 15s quick-switch buffer, and "Until Screen Off" persistence.
+  - Test fixture reset and timestamp bounds manipulation.
 - **`LockPreferencesTest`** (13 tests): Default value invariants (`isSettingsProtected == false`, `isRecentsMaskingEnabled == false`, `isBiometricsEnabled == true`, etc.), `AppSortOrder` and `LockType` enum completeness, mutation copy isolation, JSON-based PIN-only and notification mask evaluations, category overrides parsing, custom user & app tag serialization, and `isCustomized()` policy checks.
 - **`MainViewModelTest`** (21 tests): Reactive state flow combining, dual search query matching (`appName` and `packageName`), category filtering and dynamic category override, custom tag lifecycle & batch actions, customized filter, sorting, batch actions, PIN configuration, grace period serialization.
-- **`DualThemeContrastTest`** (8 tests): Mathematical WCAG 2.1 AA/AAA contrast ratios and theme rendering across screens in Light and Dark modes.
+- **`BootReceiverTest`** (4 tests): Service launch on `ACTION_BOOT_COMPLETED`, `ACTION_USER_UNLOCKED`, and `ACTION_MY_PACKAGE_REPLACED`.
+
+### 3. Instrumented Hardware Tests (`app/src/androidTest/`)
+Executed on physical devices or Android Virtual Devices (AVD) with target hardware KeyStore backing:
+- **`KeyStoreInstrumentedTest`** (3 tests):
+  - Hardware-backed StrongBox / Titan M2 AES-256-GCM key generation and storage inside `AndroidKeyStore`.
+  - Authenticated file container encryption/decryption roundtrips (`encryptToFileBytes`, `decryptFromFileBytes`) with IV length bounds and tag verification.
+  - Salted PBKDF2 PIN hashing and constant-time equality validation (`verifyHash`) using device crypto providers.
 
 ## Integration Testing
 - **DataStore Integration**: Validates reading and writing to in-memory `DataStore` preferences without deadlocks.
@@ -149,7 +160,7 @@ Unit and service tests validate cryptography, rate limiting, background intercep
 
 ## Test Data
 - Test packages: `com.example.bank`, `com.example.social`, `com.example.system`.
-- Master PIN inputs: Valid 4-digit numeric strings (`"1234"`, `"8942"`), boundary values, and invalid characters.
+- Master PIN inputs: Valid 6-digit numeric strings (`"123456"`, `"849201"`), boundary values, and invalid characters.
 
 ## Test Naming Conventions
 Follow the `given_when_then` or `method_condition_expectedResult` naming pattern:
@@ -174,9 +185,9 @@ To maintain an instant developer feedback loop, Pixel Guard provides two testing
 
 | Command | Profile | Scope | Typical Test Time |
 | :--- | :--- | :--- | :--- |
-| `.\gradlew.bat testFast` | **Fast Unit Mode** | Runs pure unit, domain, repository, and ViewModel tests (82 tests). Automatically excludes heavyweight Compose UI tests. | **~15s** (parallelized) |
-| `.\gradlew.bat testDebugUnitTest` | **Full Assurance Suite** | Runs all 143 unit and Robolectric Compose UI tests across all screens and dual themes. | **~44s** (parallelized) |
-| `.\gradlew.bat testDebugUnitTest --tests "ClassName"` | **Targeted Class** | Runs a single test class (e.g. `SessionManagerTest`). | **<3s** |
+| `.\gradlew.bat testFast` | **Fast Unit Mode** | Runs pure unit, domain, repository, service, and ViewModel tests (116 tests). Automatically excludes heavyweight Compose UI tests. | **~15s** (parallelized) |
+| `.\gradlew.bat testDebugUnitTest` | **Full Assurance Suite** | Runs all 188 unit and Robolectric Compose UI tests across all screens, services, crypto providers, and dual themes. | **~50s** (parallelized) |
+| `.\gradlew.bat testDebugUnitTest --tests "ClassName"` | **Targeted Class** | Runs a single test class (e.g. `SessionManagerTest`, `CryptoManagerTest`). | **<3s** |
 
 ### Execution Optimizations
 - **Multi-Core Test Parallelization**: Configured with `maxParallelForks = (availableProcessors / 2)` in `app/build.gradle.kts` to execute test suites concurrently.
@@ -209,7 +220,7 @@ When setting up automated GitHub Actions / GitLab CI:
 
 ## Definition of Done
 A feature or bugfix is considered **Done** only when:
-- [x] Code strictly adheres to [RULES.md](file:///a:/Development/app-lock/docs/RULES.md) and [DESIGN.md](file:///a:/Development/app-lock/docs/DESIGN.md).
+- [x] Code strictly adheres to [RULES.md](file:///a:/Development/pixel-guard/docs/RULES.md) and [DESIGN.md](file:///a:/Development/pixel-guard/docs/DESIGN.md).
 - [x] No UI-thread disk, bitmap, or package queries exist.
 - [x] All unit tests pass.
 - [x] Verified on target Google Pixel 9 hardware via ADB.

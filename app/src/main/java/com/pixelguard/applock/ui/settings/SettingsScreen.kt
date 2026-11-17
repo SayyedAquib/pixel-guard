@@ -811,7 +811,8 @@ fun SettingsScreen(
 fun ChangePinSheetContent(
     onDismiss: () -> Unit,
     onSavePin: (String) -> Unit,
-    onVerifyCurrentPin: (suspend (String) -> Boolean)? = null
+    onVerifyCurrentPin: (suspend (String) -> Boolean)? = null,
+    isWeakPin: (String) -> Boolean = { com.pixelguard.applock.data.local.CryptoManager.isWeakPin(it) }
 ) {
     var currentPin by remember { mutableStateOf("") }
     var newPin by remember { mutableStateOf("") }
@@ -928,7 +929,7 @@ fun ChangePinSheetContent(
                     onClick = {
                         if (newPin.length != 6) {
                             error = "Passcode must be exactly 6 digits"
-                        } else if (com.pixelguard.applock.AppLockApplication.instance.cryptoManager.isWeakPin(newPin)) {
+                        } else if (isWeakPin(newPin)) {
                             error = "PIN is too weak or sequential (e.g. 123456, 000000). Choose a stronger PIN."
                         } else if (newPin != confirmPin) {
                             error = "Passcodes do not match"

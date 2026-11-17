@@ -11,12 +11,18 @@ android {
     namespace = "com.pixelguard.applock"
     compileSdk = 35
 
+    val buildVersionCode = project.findProperty("versionCode")?.toString()?.toIntOrNull()
+        ?: System.getenv("BUILD_NUMBER")?.toIntOrNull()
+        ?: 1
+    val buildVersionName = project.findProperty("versionName")?.toString()
+        ?: "1.0.0"
+
     defaultConfig {
         applicationId = "com.pixelguard.applock"
         minSdk = 33
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = buildVersionCode
+        versionName = buildVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -42,13 +48,13 @@ android {
             val keyPass = keystoreProps.getProperty("RELEASE_KEY_PASSWORD")
                 ?: System.getenv("KEY_PASSWORD")
 
-            if (storeFilePath != null && storePass != null && keyAl != null && keyPass != null) {
+            if (storeFilePath != null && storePass != null && keyAl != null && keyPass != null && rootProject.file(storeFilePath).exists()) {
                 storeFile = rootProject.file(storeFilePath)
                 storePassword = storePass
                 keyAlias = keyAl
                 keyPassword = keyPass
             } else {
-                throw GradleException("Release signing credentials missing. Please configure keystore.properties based on keystore.properties.example")
+                logger.warn("Release signing credentials missing or keystore file does not exist. Release builds will be unsigned.")
             }
         }
     }
@@ -57,7 +63,10 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            signingConfig = signingConfigs.getByName("release")
+            val releaseSigning = signingConfigs.findByName("release")
+            if (releaseSigning?.storeFile != null) {
+                signingConfig = releaseSigning
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -127,7 +136,6 @@ dependencies {
 
     // DataStore Preferences & Keystore Encryption
     implementation(libs.androidx.datastore.preferences)
-    implementation(libs.androidx.security.crypto)
 
     // CameraX for Intruder Selfie
     implementation(libs.androidx.camera.core)

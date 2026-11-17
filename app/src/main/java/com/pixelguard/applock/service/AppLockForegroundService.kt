@@ -7,11 +7,14 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.provider.Settings
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
 import com.pixelguard.applock.AppLockApplication
 import com.pixelguard.applock.BuildConfig
 import com.pixelguard.applock.R
@@ -48,11 +51,16 @@ class AppLockForegroundService : Service() {
                 Intent.ACTION_SCREEN_OFF -> {
                     if (BuildConfig.DEBUG) Log.i(TAG, "Screen OFF event: pausing detection loop")
                     isScreenInteractive = false
+                    monitoringJob?.cancel()
+                    monitoringJob = null
                     SessionManager.onScreenOff()
                 }
                 Intent.ACTION_SCREEN_ON -> {
                     if (BuildConfig.DEBUG) Log.i(TAG, "Screen ON event: resuming detection loop")
                     isScreenInteractive = true
+                    if (monitoringJob == null || monitoringJob?.isActive == false) {
+                        startMonitoringLoop()
+                    }
                 }
             }
         }
@@ -120,7 +128,16 @@ class AppLockForegroundService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val notification = createNotification()
-        startForeground(NOTIFICATION_ID, notification)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            ServiceCompat.startForeground(
+                this,
+                NOTIFICATION_ID,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            )
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
+        }
         if (monitoringJob == null || monitoringJob?.isActive == false) {
             startMonitoringLoop()
         }
@@ -131,6 +148,13 @@ class AppLockForegroundService : Service() {
         monitoringJob?.cancel()
         monitoringJob = scope.launch(Dispatchers.Default) {
             while (isActive) {
+                if (!AppUsageDetector.hasUsageStatsPermission(this@AppLockForegroundService)) {
+                    if (BuildConfig.DEBUG) {
+                        Log.w(TAG, "Usage access revoked. Backing off monitoring loop.")
+                    }
+                    delay(5000L)
+                    continue
+                }
                 if (isScreenInteractive) {
                     val currentPackage = AppUsageDetector.queryLatestResumedPackage(this@AppLockForegroundService)
                     if (currentPackage != null) {
@@ -203,9 +227,8 @@ class AppLockForegroundService : Service() {
 
             val isUnlocked = SessionManager.isTemporarilyUnlocked(packageName, effectiveGrace)
             if (!isUnlocked) {
-                if (!LockActivity.isShowing) {
-                    launchLockActivity(packageName)
-                    lockTriggered = true
+                if (!LockActivity.isShowing && !(LockActivity.isLaunching && LockActivity.activeTargetPackage == packageName)) {
+                    lockTriggered = launchLockActivity(packageName)
                 }
             } else {
                 SessionManager.markAppResumed(packageName)
@@ -220,14 +243,35 @@ class AppLockForegroundService : Service() {
         return lockTriggered
     }
 
-    private fun launchLockActivity(packageName: String) {
+    @androidx.annotation.VisibleForTesting
+    internal var overlayPermissionChecker: (Context) -> Boolean = { Settings.canDrawOverlays(it) }
+
+    private fun launchLockActivity(packageName: String): Boolean {
+        if (!overlayPermissionChecker(this)) {
+            if (BuildConfig.DEBUG) {
+                Log.w(TAG, "Overlay permission (SYSTEM_ALERT_WINDOW) not granted; cannot launch lock activity")
+            }
+            return false
+        }
+        if (LockActivity.isShowing || (LockActivity.isLaunching && LockActivity.activeTargetPackage == packageName)) {
+            return false
+        }
+        LockActivity.isLaunching = true
+        LockActivity.activeTargetPackage = packageName
         val lockIntent = Intent(this, LockActivity::class.java).apply {
             putExtra(LockActivity.EXTRA_TARGET_PACKAGE, packageName)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or
                     Intent.FLAG_ACTIVITY_NO_ANIMATION or
                     Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS
         }
-        startActivity(lockIntent)
+        return try {
+            startActivity(lockIntent)
+            true
+        } catch (e: Exception) {
+            LockActivity.isLaunching = false
+            if (BuildConfig.DEBUG) android.util.Log.e("AppLockFGS", "Failed to launch LockActivity: ${e.message}")
+            false
+        }
     }
 
     private fun createNotification(): Notification {

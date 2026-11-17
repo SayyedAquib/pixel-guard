@@ -29,7 +29,7 @@ class DiagnosticExporterTest {
             deviceModel = "Pixel 9",
             androidVersion = 35,
             securityPatch = "2026-10-01",
-            isAccessibilityActive = true,
+            isUsageStatsActive = true,
             isNotificationShieldActive = true,
             snapshot = snapshot,
             intruderRecordsCount = 3,
@@ -53,7 +53,7 @@ class DiagnosticExporterTest {
 
         // 3. Security posture & shields
         val securityObj = json.getJSONObject("security")
-        assertThat(securityObj.getBoolean("isAccessibilityActive")).isTrue()
+        assertThat(securityObj.getBoolean("isUsageStatsActive")).isTrue()
         assertThat(securityObj.getBoolean("isNotificationShieldActive")).isTrue()
         assertThat(securityObj.getBoolean("isSettingsProtected")).isTrue()
         assertThat(securityObj.getBoolean("isPlayStoreProtected")).isFalse()
