@@ -164,6 +164,27 @@ class StateMachineTest {
         assertThat(state.isLockedOut).isTrue()
     }
 
+    @Test
+    fun rateLimitState_whenLockoutExpires_transitionsToWarningAndClearsLockout() {
+        var baseTime = 100_000L
+        SessionManager.setTimeProviderForTest { baseTime }
+        repeat(5) { SessionManager.incrementFailedAttempts(testPkg) }
+        val stateLocked = SessionManager.getRateLimitState(testPkg)
+        assertThat(stateLocked.isLockedOut).isTrue()
+
+        var lockoutNotified = false
+        SessionManager.onLockoutChanged = { _, durationRemaining, _ ->
+            if (durationRemaining == 0L) lockoutNotified = true
+        }
+
+        // Fast-forward past 30s penalty
+        baseTime += 31_000L
+        val stateExpired = SessionManager.getRateLimitState(testPkg)
+        assertThat(stateExpired.isLockedOut).isFalse()
+        assertThat(stateExpired).isInstanceOf(RateLimitState.Warning::class.java)
+        assertThat(lockoutNotified).isTrue()
+    }
+
     // =========================================================================
     // 3. CameraCaptureState (SM-7)
     // =========================================================================

@@ -16,7 +16,7 @@ Pixel Guard enforces a pragmatic, high-assurance testing strategy. Because it is
   - `io.mockk:mockk:1.13.13`: Kotlin-first mocking for Android platform components and context services.
 - **Device Hardware Testing**: Android Debug Bridge (ADB) via PowerShell on Google Pixel 9 (Android 17, 120Hz display).
 
-## Test Suite Structure (188 Total Tests, 100% Passing)
+## Test Suite Structure (191 Total Tests, 100% Passing)
 
 ### 1. Presentation & Compose UI Tests (62 tests)
 All UI tests run via Compose UI Rule + Robolectric on the JVM with exact Pixel 9 display metrics:
@@ -85,7 +85,7 @@ All UI tests run via Compose UI Rule + Robolectric on the JVM with exact Pixel 9
   - Mathematical relative luminance contrast ratio verification on alerts and buttons.
   - Legible rendering checks across `MainScreen`, `SettingsScreen`, and `OnboardingScreen` in both light and dark modes.
 
-### 2. Unit, Domain, Repository & Service Tests (126 tests)
+### 2. Unit, Domain, Repository & Service Tests (129 tests)
 Unit and service tests validate cryptography, rate limiting, background interception resilience, and data persistence:
 - **`CryptoManagerTest`** (25 tests):
   - PBKDF2/SHA-256 (200k iterations) hashing and constant-time verification.
@@ -122,16 +122,31 @@ Unit and service tests validate cryptography, rate limiting, background intercep
   - Screen-off broadcast receiver session revocation and polling suspension (`BAT-002`).
   - Screen-on evaluation resumption.
   - Overlay permission check before activity launches.
-- **`SilentCameraCaptureTest`** (6 tests, `BAT-001`):
+- **`SilentCameraCaptureTest`** (9 tests, `BAT-001`, `ADR 063`):
   - Cooldown window enforcement (10-second thermal delay between intruder photo attempts).
   - Hardware concurrency mutex (`isCapturing`) preventing overlapping Camera2 / ISP sessions during rapid failed PIN attempts.
   - Test fixture reset and timestamp bounds manipulation.
-- **`StateMachineTest`** (13 tests, `ADR 061`):
+  - Fallback to 640x480 when supported stream sizes are null or empty.
+  - Selection of smallest ideal resolution in 640..1280 width across typical multi-stream sensor configurations.
+  - Resilient selection of smallest supported ideal size when 640x480 is omitted by sensor firmware.
+- **`LockOverlayScreenUiTest`** (11 tests, `ADR 065`):
+  - Passcode submission on 6th digit, backspace deletion, and scrambled keypad distribution.
+  - Caution badge display on 2 attempts remaining.
+  - Active lockout countdown presentation when `currentLockout > 0`.
+  - Non-display of lockout banners when `verificationState` is `Success` or `Verifying` with `currentLockout = 0`.
+- **`StateMachineTest`** (14 tests, `ADR 061`, `ADR 062`):
   - `AppSessionState` evaluation across all 6 lifecycle states (`Locked`, `ActiveForeground`, `TransitionBuffer`, `GracePeriod`, `Expired`, `Paused`).
   - `RateLimitState` progressive lockout evaluation (`Unrestricted`, `Warning` with caution badge calculation, `SoftLockout`, `MediumLockout`, `ExtendedLockout`).
+  - Automatic lockout expiration and timestamp cleanup transition from `RateLimitState.LockedOut` to `RateLimitState.Warning`.
   - `CameraCaptureState` hardware states (`Idle`, `CapturingStill`, `InCooldown`, and cooldown expiration).
   - `LockActivityState` presentation and lifecycle synchronization with companion properties (`isShowing`, `isLaunching`, `activeTargetPackage`).
   - `OnboardingStep` deterministic step resolution across all setup permutations.
+- **`SessionManagerTest`** (24 tests, `ADR 062`, `ADR 064`):
+  - Active session tracking, grace periods, night lockdown windows, transient launcher transitions.
+  - Rate-limiting failure counters, progressive penalties (30s, 60s, 300s).
+  - Real-time lockout expiry reconciliation (`syncPersistedLockout_whenLockoutExpiredInRealTime_cleansUpAndDoesNotLockOut`).
+  - Clock tampering fail-closed defense (`syncPersistedLockout_clockTampering_failsClosedToMaxLockout`).
+  - Automatic reset of failed attempts on successful app unlock (`markAppUnlocked`).
 - **`LockPreferencesTest`** (13 tests): Default value invariants (`isSettingsProtected == false`, `isRecentsMaskingEnabled == false`, `isBiometricsEnabled == true`, etc.), `AppSortOrder` and `LockType` enum completeness, mutation copy isolation, JSON-based PIN-only and notification mask evaluations, category overrides parsing, custom user & app tag serialization, and `isCustomized()` policy checks.
 - **`MainViewModelTest`** (21 tests): Reactive state flow combining, dual search query matching (`appName` and `packageName`), category filtering and dynamic category override, custom tag lifecycle & batch actions, customized filter, sorting, batch actions, PIN configuration, grace period serialization.
 - **`BootReceiverTest`** (4 tests): Service launch on `ACTION_BOOT_COMPLETED`, `ACTION_USER_UNLOCKED`, and `ACTION_MY_PACKAGE_REPLACED`.

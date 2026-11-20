@@ -251,15 +251,14 @@ class MainViewModel @JvmOverloads constructor(
         }
         val isCorrect = repository.verifyPin(currentPin)
         if (isCorrect) {
-            com.pixelguard.applock.domain.usecase.SessionManager.resetFailedAttempts(appPkg)
             return true
         } else {
-            val attempts = com.pixelguard.applock.domain.usecase.SessionManager.incrementFailedAttempts(appPkg)
+            val attempts = com.pixelguard.applock.domain.usecase.SessionManager.getFailedAttempts(appPkg)
             val currentPrefs = preferences.value
             if (currentPrefs.isIntruderSelfieEnabled && attempts >= currentPrefs.failedAttemptsThreshold) {
                 val camera = com.pixelguard.applock.service.camera.SilentCameraCapture(AppLockApplication.instance)
                 camera.captureIntruderPhoto { photoFile ->
-                    viewModelScope.launch {
+                    AppLockApplication.instance.applicationScope.launch {
                         val record = IntruderRecord(
                             id = java.util.UUID.randomUUID().toString(),
                             timestamp = System.currentTimeMillis(),
@@ -425,14 +424,7 @@ class MainViewModel @JvmOverloads constructor(
         if (com.pixelguard.applock.domain.usecase.SessionManager.isLockedOut(appPkg)) {
             return false
         }
-        val isCorrect = repository.verifyPin(pin)
-        if (isCorrect) {
-            com.pixelguard.applock.domain.usecase.SessionManager.resetFailedAttempts(appPkg)
-            return true
-        } else {
-            com.pixelguard.applock.domain.usecase.SessionManager.incrementFailedAttempts(appPkg)
-            return false
-        }
+        return repository.verifyPin(pin)
     }
 
     fun resetSelfFailedAttempts() {

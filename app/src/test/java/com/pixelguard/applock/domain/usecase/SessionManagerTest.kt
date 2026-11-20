@@ -383,14 +383,28 @@ class SessionManagerTest {
         assertTrue("Future clock tampering must fail-closed (M-11)", SessionManager.isLockedOut(testPackage))
         assertTrue(SessionManager.getRemainingLockoutSeconds(testPackage) in 290..300)
 
-        // Clock manipulated into past with duration remaining:
+        // Clock manipulated backwards into the past during active lockout (currentWallTime far behind):
+        SessionManager.syncPersistedLockout(
+            attempts = 5,
+            wallClockExpiryMs = now + 20_000L,
+            durationRemainingMs = 30_000L,
+            currentWallTime = now - 600_000L
+        )
+        assertTrue("Past clock tampering with active lockout must fail-closed (M-11)", SessionManager.isLockedOut(testPackage))
+        assertTrue(SessionManager.getRemainingLockoutSeconds(testPackage) in 290..300)
+    }
+
+    @Test
+    fun syncPersistedLockout_whenLockoutExpiredInRealTime_cleansUpAndDoesNotLockOut() {
+        val now = System.currentTimeMillis()
+        // Lockout expired naturally (wallClockExpiryMs in the past):
         SessionManager.syncPersistedLockout(
             attempts = 5,
             wallClockExpiryMs = now - 100_000L,
             durationRemainingMs = 30_000L,
             currentWallTime = now
         )
-        assertTrue("Past clock tampering with remaining duration must remain locked out (M-11)", SessionManager.isLockedOut(testPackage))
-        assertTrue(SessionManager.getRemainingLockoutSeconds(testPackage) in 25..30)
+        assertFalse("Past naturally expired lockout must not lock out", SessionManager.isLockedOut(testPackage))
+        assertEquals(0, SessionManager.getRemainingLockoutSeconds(testPackage))
     }
 }

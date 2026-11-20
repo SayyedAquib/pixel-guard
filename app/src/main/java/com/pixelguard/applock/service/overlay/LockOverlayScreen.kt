@@ -141,12 +141,13 @@ fun LockOverlayScreen(
         localState = null
         when (verificationState) {
             LockVerificationState.Verifying -> {}
-            LockVerificationState.Success -> {}
+            LockVerificationState.Success -> {
+                currentLockout = 0
+                pinInput = ""
+            }
             LockVerificationState.Failed -> {
                 val lockout = lockoutSecondsProvider()
-                if (lockout > 0) {
-                    currentLockout = lockout
-                }
+                currentLockout = lockout
                 attemptsUntilLockout = attemptsUntilLockoutProvider()
                 if (isAnimationsEnabled) {
                     launch { dotErrorAnim.animateTo(1f, tween(60)) }
@@ -453,7 +454,7 @@ fun LockOverlayScreen(
 
                     Spacer(modifier = Modifier.height(28.dp))
 
-                    if (isKeypadDisabled) {
+                    if (currentLockout > 0) {
                         Column(
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
@@ -743,9 +744,7 @@ fun LockOverlayScreen(
                                                                     kotlinx.coroutines.delay(600L)
                                                                     if (isVerifying && verificationState == LockVerificationState.Idle) {
                                                                         val lockout = lockoutSecondsProvider()
-                                                                        if (lockout > 0) {
-                                                                            currentLockout = lockout
-                                                                        }
+                                                                        currentLockout = lockout
                                                                         attemptsUntilLockout = attemptsUntilLockoutProvider()
                                                                         if (isAnimationsEnabled) {
                                                                             launch { dotErrorAnim.animateTo(1f, tween(60)) }

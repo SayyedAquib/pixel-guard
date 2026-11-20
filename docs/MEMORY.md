@@ -483,6 +483,33 @@
         - **UI & Gate Cleanup**: Replaced ad-hoc `isAuthenticated` and `isPinConfigured` booleans in `MainActivity` with `AppGateState`; removed shadow flags in `LockOverlayScreen`; refactored `OnboardingScreen` buttons with `OnboardingStep.resolve()`.
         - **Automated Verification**: Authored `StateMachineTest.kt` with 13 comprehensive unit tests verifying all state transitions, invariants, and 100% backwards compatibility.
 
+    13. **Phantom Lockout Expiry Remediation & Persistence Lifecycle (ADR 062)**:
+        - **Root Cause Analysis**: Identified that `KEY_GLOBAL_LOCKOUT_DURATION_MS` and `KEY_GLOBAL_LOCKOUT_WALL_CLOCK_TIMESTAMP` in DataStore were never cleared upon natural lockout expiration, causing `AppLockApplication` cold-starts to re-trigger unearned 30s red lockout banners ("Locked out. Try again in 30s") via M-11 backward clock-tamper defense.
+        - **Cold-Start Expiry Check**: Implemented real-time check in `AppLockApplication.onCreate()` comparing `wallClockExpiry in 1..now`. Expired lockouts are cleared immediately in DataStore with `wallClockExpiryMs = 0L, durationRemainingMs = 0L` passed to `SessionManager`.
+        - **In-Memory Transition Cleanup**: Instrumented `SessionManager.getRateLimitState()` to automatically clear in-memory lockout timestamps and dispatch `onLockoutChanged(attempts, 0L, 0L)` when countdown reaches zero.
+        - **Testing & Isolation**: Added `rateLimitState_whenLockoutExpires_transitionsToWarningAndClearsLockout` to `StateMachineTest.kt` (14 tests total). Added `resetTimeProviderForTest()` ensuring test time mocks do not pollute test runners.
+        - **Deployment**: Verified 141 unit tests passing (`testFast`), compiled release APK via R8, and deployed to connected Google Pixel 9 via ADB.
+
+    14. **Intruder Selfies Hardware Hardening & Face Unlock Contention Resolution (ADR 063)**:
+        - **Dynamic JPEG Stream Resolution**: Replaced static `ImageReader(640, 480)` with `SilentCameraCapture.selectOptimalJpegSize()` querying `StreamConfigurationMap.getOutputSizes(ImageFormat.JPEG)`. Selects optimal sizes in 640..1280 width with guaranteed hardware backing, preventing Camera2 `IllegalArgumentException` on Pixel 9.
+        - **Face Unlock & Biometric Cancellation**: In `LockActivity.onAuthenticationFailed()`, when attempts reach threshold, explicitly calls `biometricPrompt.cancelAuthentication()` and enforces a 200ms cooldown, giving the Pixel 9 Face Unlock HAL (`android.hardware.biometrics.face-service.pixel`) time to release Camera 1 before silent capture opens the sensor.
+        - **Lockout Selfie Trigger Parity**: Added `captureIntruder()` to both `VerifyPinResult.WrongPin` and `VerifyPinResult.LockedOut`, ensuring selfies are captured on the exact attempt that trips the 30-second lockout.
+        - **Process-Level Persistence Scope**: Dispatched `repository.addIntruderRecord()` via `AppLockApplication.applicationScope`, guaranteeing records are saved even if `LockActivity` finishes or destroys before capture finishes.
+        - **Settings Hub Navigation**: Added "View Intruder Photos" action row in `SettingsScreen` directly below the toggle with real-time attempt count badge.
+        - **Unit Verification**: Added 3 unit tests in `SilentCameraCaptureTest.kt` verifying null/empty fallback, optimal resolution selection, and non-640x480 resolution selection.
+
+    15. **Perpetual Lockout Loop Elimination & Real-Time Expiry Reconciliation (ADR 064)**:
+        - **Root Cause & Mathematical Inversion**: In `SessionManager.syncPersistedLockout()`, `else if (durationRemainingMs > 0L)` treated any naturally expired lockout (`wallClockExpiryMs <= currentWallTime`) with a positive persisted duration (`durationRemainingMs = 30000L`) as backward clock tampering (M-11 fail-closed defense), resetting lockout to `now() + 30s` whenever invoked.
+        - **BootReceiver Expiry Parity**: In `BootReceiver`, added real-time validation `if (wallClockExpiry in 1..now || (wallClockExpiry == 0L && durationMs > 0L))` so that `ACTION_USER_UNLOCKED` upon device unlock wipes stale lockouts rather than re-imposing them.
+        - **Biometric Failure Counter Reset**: Fixed defect where `LockActivity.onAuthenticationSucceeded()` failed to invoke `SessionManager.resetFailedAttempts(targetPackage)`. Transient Face Unlock rejections in poor lighting previously accumulated toward the 5-attempt threshold. Also wired `SessionManager.markAppUnlocked()` to auto-reset failed attempts on any successful app unlock.
+        - **Automated Verification**: Updated `SessionManagerTest` with `syncPersistedLockout_whenLockoutExpiredInRealTime_cleansUpAndDoesNotLockOut` and active backward tamper defense test.
+
+    16. **Lockout Presentation Isolation & Passcode Verification Unification (ADR 065)**:
+        - **Decoupled Keypad Disabling from Lockout Banner**: In `LockOverlayScreen.kt`, changed lockout banner presentation gate from `if (isKeypadDisabled)` to `if (currentLockout > 0)`. Conflation had caused the red "Locked out. Try again in 30s" banner to flash whenever `isVerifying` or `isUnlocked` was active upon entering the 6th passcode digit.
+        - **Success State Lockout Purge**: Explicitly set `currentLockout = 0` on `LockVerificationState.Success` in `LockOverlayScreen.kt`.
+        - **Double-Increment Defect Remediation**: Removed secondary calls to `SessionManager.incrementFailedAttempts()` in `MainViewModel.verifySelfPin()` and `verifyMasterPinForChange()`, ensuring wrong PIN attempts are recorded exactly once by `AppLockRepositoryImpl`.
+        - **UI Test Parity**: Authored `unlockSuccessAndVerifying_neverDisplaysLockoutBanner` in `LockOverlayScreenUiTest.kt`.
+
 ## Next Steps
 - When Google Pixel 9 is reconnected via ADB (`adb connect` or USB), execute:
   `adb install -r -d "app\build\outputs\apk\release\app-release.apk"`

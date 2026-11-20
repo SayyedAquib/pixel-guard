@@ -18,6 +18,8 @@ class AppLockApplication : Application() {
     lateinit var repository: AppLockRepositoryImpl
         private set
 
+    val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     val cryptoManager: com.pixelguard.applock.data.local.CryptoManager by lazy {
         com.pixelguard.applock.data.local.CryptoManager()
     }
@@ -29,19 +31,30 @@ class AppLockApplication : Application() {
         repository = AppLockRepositoryImpl(applicationContext, dataStore)
         createNotificationChannels()
 
-        val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        appScope.launch {
+        applicationScope.launch {
             val attempts = dataStore.globalFailedAttemptsFlow.first()
             val wallClockExpiry = dataStore.globalLockoutWallClockTimestampFlow.first()
             val durationMs = dataStore.globalLockoutDurationMsFlow.first()
-            com.pixelguard.applock.domain.usecase.SessionManager.syncPersistedLockout(
-                attempts = attempts,
-                wallClockExpiryMs = wallClockExpiry,
-                durationRemainingMs = durationMs
-            )
+            val now = System.currentTimeMillis()
+            if (wallClockExpiry in 1..now || (wallClockExpiry == 0L && durationMs > 0L)) {
+                // The persisted lockout expired while the app was closed or device was off.
+                // Clear the expired lockout from DataStore so it does not phantom-lock on launch.
+                dataStore.saveGlobalLockout(attempts, 0L, 0L)
+                com.pixelguard.applock.domain.usecase.SessionManager.syncPersistedLockout(
+                    attempts = attempts,
+                    wallClockExpiryMs = 0L,
+                    durationRemainingMs = 0L
+                )
+            } else {
+                com.pixelguard.applock.domain.usecase.SessionManager.syncPersistedLockout(
+                    attempts = attempts,
+                    wallClockExpiryMs = wallClockExpiry,
+                    durationRemainingMs = durationMs
+                )
+            }
         }
         com.pixelguard.applock.domain.usecase.SessionManager.onLockoutChanged = { attempts, durationMs, wallClockExpiryMs ->
-            appScope.launch {
+            applicationScope.launch {
                 dataStore.saveGlobalLockout(attempts, durationMs, wallClockExpiryMs)
             }
         }

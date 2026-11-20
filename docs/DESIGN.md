@@ -161,7 +161,7 @@ Standard 4dp/8dp grid system:
 
 ### Explicit State-Driven UI Choreography
 - **Lock Verification State**: Keypad inputs transition to `LockVerificationState.Verifying` upon the 6th digit, triggering visual spinner and disabling concurrent touches. `LockVerificationState.Success` drives the green checkmark burst, and `LockVerificationState.Failed` triggers the 3-stage elastic shake and fade choreography.
-- **Progressive Rate Limiting UI**: Driven by typed `RateLimitState` rather than magic number conditionals. `RateLimitState.Warning.isCautionBadgeVisible` displays the amber pre-lockout badge when $\le 2$ attempts remain. `RateLimitState.LockedOut` disables keypad discs, displays the penalty countdown banner, and renders the live linear progress penalty drain bar.
+- **Progressive Rate Limiting UI**: Driven by typed `RateLimitState` rather than magic number conditionals. `RateLimitState.Warning.isCautionBadgeVisible` displays the amber pre-lockout badge when $\le 2$ attempts remain. `RateLimitState.LockedOut` disables keypad discs, displays the penalty countdown banner, and renders the live linear progress penalty drain bar. Upon timer expiry, the UI transitions back smoothly to `RateLimitState.Warning`/`Unrestricted` without requiring app restarts or device power cycles. Successful unlocks via biometric prompt or PIN immediately purge lockout counters, restoring clean state without persistent rate-limiting artifacts.
 - **Onboarding Progression**: `OnboardingStep` drives primary action button text ("Turn On App Detection" -> "Enable Display Over Other Apps" -> "Save Passcode & Finish" -> "Get Started") and dialog states deterministically without nested boolean flag evaluation.
 - **Self-Lock Gate**: `AppGateState` drives `MainActivity` transition between `Loading`, `FirstTimeOnboarding`, `Locked` (overlay active), and `Authenticated` (dashboard accessible).
 
@@ -227,6 +227,10 @@ Standard 4dp/8dp grid system:
   2. *Step 2: New 6-Digit Passcode*: User enters the new passcode with real-time numeric masking and weak-PIN validation.
   3. *Step 3: Confirm New Passcode*: Confirms matching 6-digit code with error feedback on mismatch.
 - **Visual Hygiene & Security**: All inputs use `PasswordVisualTransformation('\u2022')`, `KeyboardType.NumberPassword`, and auto-advance focus.
+
+### Intruder Selfies Hub & Evidence Quick-Action
+- **Settings Hub Action Row**: Integrated within the Privacy & Safety card. Toggling Intruder Selfies on immediately renders a "View Intruder Photos" action row with real-time unauthorized attempt counter badge, directly linking to the evidence viewer (`Destinations.INTRUDERS`).
+- **Biometric Handshake Feedback**: When intruder thresholds are tripped while Face Unlock is active, the system biometric prompt cancels cleanly without error popups, seamlessly transitioning into keypad entry while the camera captures evidence in the background.
 
 ## Do Not
 - **Do NOT** use hardcoded non-theme colors for backgrounds or text.

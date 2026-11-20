@@ -64,11 +64,22 @@ class SilentCameraCapture(private val context: Context) {
             return
         }
 
-        val frontCameraId = cameraManager.cameraIdList.firstOrNull { id ->
-            val characteristics = cameraManager.getCameraCharacteristics(id)
-            characteristics.get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_FRONT
+        val frontCameraId: String?
+        val frontCharacteristics: CameraCharacteristics?
+        try {
+            val id = cameraManager.cameraIdList.firstOrNull { candidateId ->
+                val chars = cameraManager.getCameraCharacteristics(candidateId)
+                chars.get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_FRONT
+            }
+            frontCameraId = id
+            frontCharacteristics = if (id != null) cameraManager.getCameraCharacteristics(id) else null
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.e(TAG, "Error querying camera characteristics: ${e.message}")
+            releaseCapture()
+            return
         }
-        if (frontCameraId == null) {
+
+        if (frontCameraId == null || frontCharacteristics == null) {
             releaseCapture()
             return
         }
@@ -88,14 +99,19 @@ class SilentCameraCapture(private val context: Context) {
         }
         val outputFile = File(intruderDir, "intruder_${System.currentTimeMillis()}_${UUID.randomUUID().toString().take(6)}.enc")
 
-        imageReader = ImageReader.newInstance(640, 480, ImageFormat.JPEG, 1).apply {
+        val optimalSize = selectOptimalJpegSize(frontCharacteristics)
+        imageReader = ImageReader.newInstance(optimalSize.width, optimalSize.height, ImageFormat.JPEG, 1).apply {
             setOnImageAvailableListener({ reader ->
-                val image = reader.acquireLatestImage()
+                val image = try {
+                    reader.acquireLatestImage()
+                } catch (e: Exception) {
+                    null
+                }
                 if (image != null) {
                     val buffer = image.planes[0].buffer
                     val bytes = ByteArray(buffer.remaining())
                     buffer.get(bytes)
-                    image.close()
+                    try { image.close() } catch (_: Exception) {}
 
                     try {
                         transitionTo(CameraCaptureState.ProcessingImage(outputFile.name))
@@ -119,28 +135,28 @@ class SilentCameraCapture(private val context: Context) {
             cameraManager.openCamera(frontCameraId, object : CameraDevice.StateCallback() {
                 override fun onOpened(camera: CameraDevice) {
                     if (isClosed.get()) {
-                        camera.close()
+                        try { camera.close() } catch (_: Exception) {}
                         return
                     }
                     cameraDevice = camera
                     if (imageReader == null) {
-                        camera.close()
+                        try { camera.close() } catch (_: Exception) {}
                         cleanup()
                         return
                     }
                     transitionTo(CameraCaptureState.ConfiguringSession)
-                    createCaptureSession(camera, outputFile)
+                    createCaptureSession(camera, frontCharacteristics, outputFile)
                 }
 
                 override fun onDisconnected(camera: CameraDevice) {
                     transitionTo(CameraCaptureState.Failed("Camera disconnected"))
-                    camera.close()
+                    try { camera.close() } catch (_: Exception) {}
                     cleanup()
                 }
 
                 override fun onError(camera: CameraDevice, error: Int) {
                     transitionTo(CameraCaptureState.Failed("CameraDevice error code: $error"))
-                    camera.close()
+                    try { camera.close() } catch (_: Exception) {}
                     cleanup()
                 }
             }, backgroundHandler)
@@ -151,7 +167,13 @@ class SilentCameraCapture(private val context: Context) {
         }
     }
 
-    private fun createCaptureSession(camera: CameraDevice, outputFile: File) {
+    private fun selectOptimalJpegSize(characteristics: CameraCharacteristics): android.util.Size {
+        val map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
+        val sizes = map?.getOutputSizes(ImageFormat.JPEG)
+        return selectOptimalJpegSize(sizes)
+    }
+
+    private fun createCaptureSession(camera: CameraDevice, characteristics: CameraCharacteristics, outputFile: File) {
         val surface = imageReader?.surface
         if (surface == null) {
             cleanup()
@@ -160,14 +182,27 @@ class SilentCameraCapture(private val context: Context) {
         try {
             val captureRequestBuilder = camera.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE).apply {
                 addTarget(surface)
-                set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE)
-                set(CaptureRequest.JPEG_ORIENTATION, 270) // Typical front-cam orientation for portrait
+                val afModes = characteristics.get(CameraCharacteristics.CONTROL_AF_AVAILABLE_MODES) ?: intArrayOf()
+                when {
+                    afModes.contains(CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE) -> {
+                        set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE)
+                    }
+                    afModes.contains(CaptureRequest.CONTROL_AF_MODE_AUTO) -> {
+                        set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_AUTO)
+                    }
+                    else -> {
+                        set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF)
+                    }
+                }
+                val sensorOrientation = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION) ?: 270
+                set(CaptureRequest.JPEG_ORIENTATION, sensorOrientation)
+                set(CaptureRequest.JPEG_QUALITY, 85.toByte())
             }
 
-            camera.createCaptureSession(listOf(surface), object : CameraCaptureSession.StateCallback() {
+            val sessionCallback = object : CameraCaptureSession.StateCallback() {
                 override fun onConfigured(session: CameraCaptureSession) {
                     if (isClosed.get()) {
-                        session.close()
+                        try { session.close() } catch (_: Exception) {}
                         cleanup()
                         return
                     }
@@ -184,10 +219,25 @@ class SilentCameraCapture(private val context: Context) {
 
                 override fun onConfigureFailed(session: CameraCaptureSession) {
                     transitionTo(CameraCaptureState.Failed("CameraCaptureSession configuration failed"))
-                    session.close()
+                    try { session.close() } catch (_: Exception) {}
                     cleanup()
                 }
-            }, backgroundHandler)
+            }
+
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                val outputConfig = android.hardware.camera2.params.OutputConfiguration(surface)
+                val executor = java.util.concurrent.Executor { command -> backgroundHandler?.post(command) }
+                val sessionConfig = android.hardware.camera2.params.SessionConfiguration(
+                    android.hardware.camera2.params.SessionConfiguration.SESSION_REGULAR,
+                    listOf(outputConfig),
+                    executor,
+                    sessionCallback
+                )
+                camera.createCaptureSession(sessionConfig)
+            } else {
+                @Suppress("DEPRECATION")
+                camera.createCaptureSession(listOf(surface), sessionCallback, backgroundHandler)
+            }
         } catch (e: Exception) {
             transitionTo(CameraCaptureState.Failed("Session creation failed: ${e.message}", e))
             if (BuildConfig.DEBUG) Log.e(TAG, "Session creation failed: ${e.message}")
@@ -207,11 +257,11 @@ class SilentCameraCapture(private val context: Context) {
         try {
             watchdogRunnable?.let { backgroundHandler?.removeCallbacks(it) }
             watchdogRunnable = null
-            captureSession?.close()
+            try { captureSession?.close() } catch (_: Exception) {}
             captureSession = null
-            cameraDevice?.close()
+            try { cameraDevice?.close() } catch (_: Exception) {}
             cameraDevice = null
-            imageReader?.close()
+            try { imageReader?.close() } catch (_: Exception) {}
             imageReader = null
             handlerThread?.quitSafely()
             handlerThread = null
@@ -229,6 +279,25 @@ class SilentCameraCapture(private val context: Context) {
 
         private val isCapturing = AtomicBoolean(false)
         @Volatile private var lastCaptureTimestampMs: Long = 0L
+
+        /**
+         * Resolves the optimal output size for still JPEG capture from supported sensor sizes.
+         * Prioritizes sizes with width 640..1280 or height 480..960 to guarantee fast capture,
+         * low memory footprint, and high compatibility across Pixel 9 sensor streams.
+         */
+        fun selectOptimalJpegSize(supportedSizes: Array<android.util.Size>?): android.util.Size {
+            if (supportedSizes.isNullOrEmpty()) {
+                return android.util.Size(640, 480)
+            }
+            val idealSizes = supportedSizes.filter {
+                (it.width in 640..1280 && it.height in 480..960) ||
+                (it.height in 640..1280 && it.width in 480..960)
+            }
+            return idealSizes.minByOrNull { it.width * it.height }
+                ?: supportedSizes.filter { it.width * it.height <= 1920 * 1080 }.maxByOrNull { it.width * it.height }
+                ?: supportedSizes.minByOrNull { it.width * it.height }
+                ?: supportedSizes[0]
+        }
 
         /**
          * Evaluates the explicit [CameraCaptureState] of the camera hardware (Idle, CapturingStill, InCooldown).

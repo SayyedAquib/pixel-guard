@@ -44,6 +44,9 @@
 - Declare and request `SYSTEM_ALERT_WINDOW` alongside `PACKAGE_USAGE_STATS` to enable background launching of `LockActivity` on Android 10+ (API 29+) without requiring `AccessibilityService` (ADR 056).
 - All credential changes (e.g. Master PIN updates in Settings) must be rate-limited through `SessionManager` and trigger intruder photo capture on repeated failures.
 - Front camera capture must include a 4000ms watchdog timer to prevent Camera2 service lockups.
+- **Dynamic Camera2 Stream Resolution**: Front camera still capture must dynamically select a supported JPEG resolution from `StreamConfigurationMap.getOutputSizes(ImageFormat.JPEG)` (preferring 640..1280 width) rather than hardcoding static dimensions (e.g. 640x480).
+- **Biometric & Camera Hardware Isolation**: `BiometricPrompt` and headless `SilentCameraCapture` must never concurrently access the front camera sensor. When intruder threshold is tripped, the active biometric prompt must be explicitly cancelled and given a release delay (200ms) before opening the front camera.
+- **Process-Level Intruder Persistence Scope**: Intruder photo records must be persisted to `AppLockRepository` using `AppLockApplication.applicationScope` rather than activity `lifecycleScope` to prevent data loss upon activity dismissal or finishing.
 - **6-Digit Passcode & Weak PIN Defense**: Master PINs must be strictly 6 digits (`MASTER_PIN_LENGTH = 6`). Reject repeating digits, sequential numbers, and blocklisted trivial combinations via `CryptoManager.isWeakPin()`.
 - **16-Character Offline Recovery Key**: Always generate a 16-character base32 recovery key (`XXXX-XXXX-XXXX-XXXX`) during PIN setup and store its PBKDF2 hash for verified offline credential recovery.
 - **Fail-Closed Interception**: `AppLockForegroundService` must load `SecuritySnapshotManager` synchronously on creation and block non-system packages if caches are unready. Collectors must be enclosed in `SupervisorJob()` and protected with `.catch {}`.
@@ -66,6 +69,9 @@
 - Never mutate state directly from composables; emit intents/callbacks to the ViewModel.
 - Coordinate in-memory session unlock state strictly through `SessionManager`.
 - Always make state transitions explicit via typed `sealed interface` hierarchies (`AppSessionState`, `RateLimitState`, `LockActivityState`, `ForegroundMonitoringState`, `AppGateState`, `NotificationShieldState`, `OnboardingStep`, `CameraCaptureState`); never encode state spaces into combinations of multiple nullable flags, timestamps, or disjoint variables.
+- Lockout timestamps and durations persisted to DataStore must be cleaned up (`saveGlobalLockout(attempts, 0L, 0L)`) immediately upon natural expiry, both in in-memory countdown checks and during application cold-start reconciliation. Stale persisted lockouts must never trigger phantom lockouts on subsequent device unlocks.
+- All successful authentications (both PIN and hardware biometrics in `LockActivity` and `SessionManager.markAppUnlocked`) must immediately invoke `SessionManager.resetFailedAttempts()` to prevent transient sensor mismatches (e.g. Pixel 9 Face Unlock low-light rejections) from accumulating into unearned rate-limiting lockouts.
+- UI lock components (`LockOverlayScreen`) must strictly isolate click-disabling gates (`isKeypadDisabled`) from rate-limiting lockout presentation (`currentLockout > 0`). Never reuse input disabling flags to render error or lockout countdown banners.
 
 ## Testing Rules
 - Test cryptographic hashing, salt generation, and verification logic with unit tests.

@@ -44,6 +44,17 @@ object SessionManager {
         timeProvider = provider
     }
 
+    internal fun resetTimeProviderForTest() {
+        timeProvider = {
+            try {
+                val monotonic = android.os.SystemClock.elapsedRealtime()
+                if (monotonic > 0L) monotonic else System.currentTimeMillis()
+            } catch (_: Throwable) {
+                System.currentTimeMillis()
+            }
+        }
+    }
+
     // Current package currently being viewed/unlocked
     @Volatile
     var currentForegroundPackage: String? = null
@@ -187,6 +198,7 @@ object SessionManager {
         unlockedSessions[packageName] = nowTime
         exitTimestamps.remove(packageName)
         currentForegroundPackage = packageName
+        resetFailedAttempts(packageName)
     }
 
     fun markAppResumed(packageName: String) {
@@ -295,10 +307,12 @@ object SessionManager {
                 300_000L
             }
             lockoutTimestamps[GLOBAL_PACKAGE] = now() + effectiveDuration
-        } else if (durationRemainingMs > 0L) {
-            // Clock was rolled backward behind currentWallTime: enforce durationRemainingMs (M-11)
-            val clamped = durationRemainingMs.coerceIn(1L, 300_000L)
-            lockoutTimestamps[GLOBAL_PACKAGE] = now() + clamped
+        } else {
+            // Lockout has expired naturally or was never active (wallClockExpiryMs <= currentWallTime)
+            lockoutTimestamps.remove(GLOBAL_PACKAGE)
+            if (durationRemainingMs > 0L || wallClockExpiryMs > 0L) {
+                onLockoutChanged?.invoke(attempts, 0L, 0L)
+            }
         }
     }
 
@@ -362,6 +376,11 @@ object SessionManager {
                 effectiveAttempts >= 8 -> RateLimitState.LockedOut.MediumLockout(effectiveAttempts, remainingSeconds)
                 else -> RateLimitState.LockedOut.SoftLockout(effectiveAttempts, remainingSeconds)
             }
+        } else if (effectiveUntil > 0L) {
+            // Lockout countdown has elapsed in memory: clean up and notify persistence
+            lockoutTimestamps.remove(GLOBAL_PACKAGE)
+            lockoutTimestamps.remove(packageName)
+            onLockoutChanged?.invoke(effectiveAttempts, 0L, 0L)
         }
 
         return if (effectiveAttempts > 0) {
@@ -389,6 +408,7 @@ object SessionManager {
     internal fun resetAllLockoutsForTest() {
         failedAttempts.clear()
         lockoutTimestamps.clear()
+        resetTimeProviderForTest()
         onLockoutChanged?.invoke(0, 0L, 0L)
     }
 

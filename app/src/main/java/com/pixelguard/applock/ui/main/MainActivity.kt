@@ -284,7 +284,8 @@ fun AppLockRoot(
             composable(Destinations.SETTINGS) {
                 SettingsScreen(
                     viewModel = viewModel,
-                    onNavigateBack = { navController.popBackStack() }
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToIntruders = { navController.navigate(Destinations.INTRUDERS) }
                 )
             }
 

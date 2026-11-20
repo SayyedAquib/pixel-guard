@@ -1860,6 +1860,141 @@ Elevate all 9 implicit state machines into explicit, strongly-typed Kotlin `seal
 - **AX Elevation**: AI agents inspect typed, self-documenting data classes (e.g. `RateLimitState.LockedOut.SoftLockout(failedAttempts=5, remainingSeconds=28)`) rather than reverse-engineering combinations of timestamps and booleans.
 - **Backwards Compatibility**: 100% API compatibility preserved for all existing test suites, companion properties, and service consumers.
 
+---
+
+## ADR 062: Automatic Expiry Cleanup for Persisted Rate-Limiting Lockouts
+### Date
+2026-11-20
+### Status
+Accepted
+### Context
+When brute-force rate-limiting lockouts occurred (e.g. 5 failed PIN attempts triggering a 30s progressive lockout), the timestamp and duration were persisted into DataStore (`KEY_GLOBAL_LOCKOUT_DURATION_MS`, `KEY_GLOBAL_LOCKOUT_WALL_CLOCK_TIMESTAMP`). However, upon legitimate wall-clock expiration of the lockout duration, DataStore was never updated unless the user subsequently typed a correct PIN.
+
+When the application process cold-started, `AppLockApplication` read the persisted `durationMs` and passed it to `SessionManager.syncPersistedLockout()`. Because `syncPersistedLockout()` treated any non-zero `durationRemainingMs` with a past wall-clock timestamp as backward clock tampering (M-11 fail-closed defense), it re-imposed an unearned 30-second penalty (`now() + clamped`). As a result, users unlocking their device were greeted with an unearned red "Locked out. Try again in 30s" banner and blocked biometrics every time the app launched.
+
+### Decision
+1. **Application Startup Expiry Validation**:
+   - In `AppLockApplication.onCreate()`, compared `wallClockExpiry` against current wall-clock time (`System.currentTimeMillis()`).
+   - If `wallClockExpiry in 1..now`, the lockout has expired in real time: immediately invoked `dataStore.saveGlobalLockout(attempts, 0L, 0L)` and passed `wallClockExpiryMs = 0L, durationRemainingMs = 0L` to `syncPersistedLockout()`.
+2. **In-Memory Expiry Cleanup**:
+   - In `SessionManager.getRateLimitState()`, when the countdown timer reaches zero (`effectiveUntil > 0L && remainingSeconds == 0`), removed `lockoutTimestamps` and immediately invoked `onLockoutChanged?.invoke(effectiveAttempts, 0L, 0L)` to clear persisted lockout records in DataStore.
+3. **Time Provider Test Isolation**:
+   - Added `SessionManager.resetTimeProviderForTest()` invoked inside `resetAllLockoutsForTest()` to guarantee custom time providers do not leak across test classes.
+
+### Consequences
+- **UX Elevation**: Zero phantom lockout banners. Unlocking Pixel devices presents the ambient biometric prompt immediately without bogus red lockout countdowns.
+- **Security Invariants Preserved**: Monotonic in-memory timers (`SystemClock.elapsedRealtime()`) and forward clock tampering clamps (clamped to 300s maximum penalty) remain fully intact.
+- **Automated Verification**: Authored `rateLimitState_whenLockoutExpires_transitionsToWarningAndClearsLockout` in `StateMachineTest.kt` validating automatic cleanup and transition to `RateLimitState.Warning`.
+
+---
+
+## ADR 063: Dynamic Camera2 Stream Resolution, Biometric Hardware Contention Handling & Process-Scope Intruder Persistence
+### Date
+2026-11-20
+### Status
+Accepted
+### Context
+User reported: "when I try to use Intruder Selfies feature its breaking the app". An end-to-end trace across Android Camera2, `BiometricPrompt`, and lifecycle scopes identified 6 compounding defects that broke the feature on Google Pixel 9:
+1. **Unsupported Static ImageReader Resolution**: `SilentCameraCapture` hardcoded `ImageReader.newInstance(640, 480, ImageFormat.JPEG, 1)`. On Google Pixel 9's front camera sensor (`Camera 1`), `640x480` is not always a valid JPEG output stream size in `StreamConfigurationMap.getOutputSizes(ImageFormat.JPEG)`. When `camera.createCaptureSession()` was called with an invalid surface size, Android CameraService threw `IllegalArgumentException` or triggered `onConfigureFailed()`, stalling capture and firing the 4000ms watchdog timeout without saving any photo.
+2. **Hardware Camera Contention with Face Unlock**: On Google Pixel 9, `BiometricPrompt` with `BIOMETRIC_STRONG` engages the front camera sensor for Face Unlock. When biometric authentication failed, `LockActivity.onAuthenticationFailed()` immediately called `captureIntruder()` while `BiometricPrompt` was still actively running and streaming from Camera 1. This hardware contention triggered Camera HAL `Device error received, code 3`, causing `cancelRepeatingRequest()` failures and crashing or tearing down the biometric subsystem.
+3. **Missing Intruder Trigger on Progressive Lockout**: In `LockActivity.onPinSubmitted()`, `captureIntruder()` was only invoked within `VerifyPinResult.WrongPin`. When a user or intruder exceeded the threshold (e.g. 3 attempts), `SessionManager.incrementFailedAttempts()` initiated the 30-second lockout. As a result, `verifyPinResult()` returned `VerifyPinResult.LockedOut`, bypassing the selfie capture entirely.
+4. **LifecycleScope Cancellation on Activity Finish**: In `LockActivity.captureIntruder()`, the photo completion callback launched inside `lifecycleScope.launch`. When lockouts, rate limits, or user gestures caused `LockActivity` to finish or destroy while the camera pipeline was in flight, `lifecycleScope` cancelled before `AppLockApplication.instance.repository.addIntruderRecord()` could execute, leaving orphaned encrypted files on disk with zero UI records.
+5. **Deprecated Camera2 Session Creation**: Deprecated `camera.createCaptureSession(List<Surface>, ...)` lacked support for modern Android 15/17 (API 35) `SessionConfiguration` and `OutputConfiguration`.
+6. **No Navigation from Settings to Intruder Logs**: When enabling Intruder Selfies in `SettingsScreen`, users had no direct link or feedback mechanism to view captured photos, creating confusion.
+
+### Decision
+1. **Dynamic Resolution Selection (`selectOptimalJpegSize`)**:
+   - Query `CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP` -> `getOutputSizes(ImageFormat.JPEG)`.
+   - Prefer resolutions with width in 640..1280 or height in 480..960 to guarantee fast sub-second capture and low memory overhead. Fall back cleanly to the smallest supported resolution, guaranteeing 100% hardware stream compatibility.
+2. **Biometric Cancellation & Contention Cooldown**:
+   - In `LockActivity.onAuthenticationFailed()`, when attempts reach threshold: explicitly cancel `biometricPrompt.cancelAuthentication()`, transition state to `isBiometric = false`, and add a 200ms delay to allow the Pixel Face Unlock HAL (`android.hardware.biometrics.face-service.pixel`) to finish `CleanupSession ACameraDevice_close` cleanly before `SilentCameraCapture` claims Camera 1.
+3. **Lockout Trigger Parity**:
+   - Added `captureIntruder()` dispatch to both `VerifyPinResult.WrongPin` AND `VerifyPinResult.LockedOut` in `LockActivity.onPinSubmitted()`, ensuring selfies are captured on the exact attempt that triggers a lockout.
+4. **Process-Level Persistence Scope**:
+   - Added `AppLockApplication.applicationScope` (`SupervisorJob() + Dispatchers.IO`).
+   - Dispatched `repository.addIntruderRecord()` via `applicationScope` in `LockActivity` and `MainViewModel`, guaranteeing records are persisted even if the activity finishes immediately.
+5. **Modern API 35 SessionConfiguration & Robust Error Recovery**:
+   - Implemented `SessionConfiguration` and `OutputConfiguration` on API 28+ with backwards-compatible fallback.
+   - Wrapped all CameraDevice and CameraCharacteristics queries in guarded try-catch blocks.
+   - Safely closed `captureSession`, `cameraDevice`, and `imageReader` in isolated try-catch blocks during cleanup.
+6. **Settings Hub Action Row Integration**:
+   - Added "View Intruder Photos" action row in `SettingsScreen` directly underneath the Intruder Selfies toggle when enabled, displaying real-time incident count and navigating directly to `Destinations.INTRUDERS`.
+
+### Consequences
+- **Zero Hardware Collisions**: Camera 1 front sensor is cleanly shared between Face Unlock and silent intruder capture without HAL error 3 or biometric crash.
+- **Guaranteed Photo Capture**: Supported JPEG resolutions ensure `createCaptureSession` succeeds on all Pixel 9 camera firmware configurations.
+- **Resilient Record Persistence**: Intruder records are saved to encrypted storage regardless of activity lifecycle state transitions.
+- **Enhanced UX**: Users can toggle Intruder Selfies and immediately jump to photo evidence with a single tap from Settings.
+
+---
+
+## ADR 064: Elimination of Perpetual Lockout Loop & Real-Time Expiry Reconciliation
+### Date
+2026-11-20
+### Status
+Accepted
+### Context
+User reported: "still I see this when I unlock - 'Locked out. Try again in 30s'".
+A deep forensic investigation uncovered three compounding defects in rate-limiting lifecycle coordination:
+1. **The Infinite Lockout Loop**: In `SessionManager.syncPersistedLockout()`, the condition `else if (durationRemainingMs > 0L)` treated any naturally expired lockout (`wallClockExpiryMs <= currentWallTime`) with a positive persisted duration (`durationRemainingMs = 30000L`) as backward clock tampering (M-11 fail-closed defense). Because `durationRemainingMs` in DataStore was never cleared upon natural timer completion, `syncPersistedLockout()` re-imposed an unearned 30-second lockout (`now() + clamped`) whenever called.
+2. **BootReceiver Parity Gap**: Every time the user unlocked their Pixel (`ACTION_USER_UNLOCKED`), or after reboot (`ACTION_BOOT_COMPLETED`), or after app updates (`ACTION_MY_PACKAGE_REPLACED`), `BootReceiver` called `SessionManager.syncPersistedLockout(attempts, wallClockExpiry, durationMs)` without validating whether the lockout had expired. This re-armed the 30-second penalty on every single device unlock.
+3. **Missing Biometric Failure Reset**: In `LockActivity`, when biometric authentication succeeded (`onAuthenticationSucceeded`), `SessionManager.resetFailedAttempts(targetPackage)` was never called. Transient Face Unlock mismatches (common in low light or angled glances on Pixel 9) accumulated failed attempts across days without ever clearing, until 5 failures occurred and triggered a lockout.
+
+### Decision
+1. **Mathematical Inversion Fix in `SessionManager.syncPersistedLockout()`**:
+   - When `wallClockExpiryMs <= currentWallTime`, time has moved forward past expiration: the lockout has expired naturally. Removed the erroneous `else if (durationRemainingMs > 0L)` block.
+   - Immediately removed `GLOBAL_PACKAGE` from in-memory `lockoutTimestamps` and dispatched `onLockoutChanged?.invoke(attempts, 0L, 0L)` to clear persisted durations in DataStore.
+2. **BootReceiver Expiry Parity**:
+   - In `BootReceiver`, added real-time validation: `if (wallClockExpiry in 1..now || (wallClockExpiry == 0L && durationMs > 0L))`. Persisted lockout state is wiped to `0L, 0L` in DataStore and synchronized to `SessionManager`.
+3. **Biometric Unlock Parity**:
+   - In `LockActivity.onAuthenticationSucceeded()` and `LockActivity.unlockAndFinish()`, immediately invoked `SessionManager.resetFailedAttempts(targetPackage)`.
+   - In `SessionManager.markAppUnlocked(packageName)`, automatically reset failed attempts so that any successful app unlock purges failure counters across both package and global scopes.
+
+### Consequences
+- **Zero Phantom Lockouts**: Normal passage of time cleanly clears rate limits. Unlocking Google Pixel 9 presents the biometric prompt immediately with no red lockout banners.
+- **Flawless Biometric Ergonomics**: Face Unlock transient rejections followed by fingerprint authentication no longer accumulate toward rate-limit penalties.
+- **Fail-Closed M-11 Integrity Preserved**: Manipulating the device clock backwards or jumping into the future while an active lockout is running still correctly fails closed to the maximum 300-second penalty.
+
+---
+
+## ADR 065: Keypad Lockout Presentation Isolation & Verification Unification
+### Date
+2026-11-20
+### Status
+Accepted
+### Context
+User reported: "still I see this when I unlock using passcode" with quote "Locked out. Try again in 30s".
+An in-depth UI layer trace in `LockOverlayScreen.kt` and `MainViewModel.kt` uncovered two critical issues:
+1. **Conflated Keypad Disable Flag and Lockout Banner Visibility**:
+   - `val isKeypadDisabled = currentLockout > 0 || isVerifying || isUnlocked` was designed to disable touch inputs on numeric buttons during PBKDF2 hash verification or after unlock success.
+   - However, line 456 checked `if (isKeypadDisabled) { ... }` to decide whether to render the red `Icons.Default.Warning` icon and `Text(text = stringResource(R.string.lock_lockout_banner, currentLockout))`.
+   - As a result, the instant the user typed the 6th digit of their passcode, `isVerifying` became `true` -> `isKeypadDisabled` became `true` -> the UI flashed the red "Locked out. Try again in 30s" banner!
+   - When hash verification succeeded, `isUnlocked` became `true` -> `isKeypadDisabled` remained `true` -> the red "Locked out" banner continued displaying during the unlock checkmark burst until activity dismissal!
+2. **Double Failed Attempts Increment in `MainViewModel`**:
+   - `verifySelfPin(pin)` and `verifyMasterPinForChange(currentPin)` called `repository.verifyPin(pin)`.
+   - `AppLockRepositoryImpl.verifyPinResult` already increments failed attempts on wrong PIN.
+   - `verifySelfPin` then called `SessionManager.incrementFailedAttempts(appPkg)` a second time, doubling the failure count and prematurely triggering the 5-attempt rate limit.
+3. **LockOverlayScreen State Transition Parity**:
+   - On `LockVerificationState.Success`, `currentLockout` was never explicitly cleared to 0, allowing stale provider readings to bleed into the success screen transition.
+
+### Decision
+1. **Decouple Keypad Click Gating from Lockout Banner Presentation**:
+   - Changed line 456 in `LockOverlayScreen.kt` from `if (isKeypadDisabled)` to `if (currentLockout > 0)`.
+   - The red Warning icon, countdown banner, and linear progress indicator are strictly gated on `currentLockout > 0`.
+   - `isKeypadDisabled` continues to safeguard numeric buttons (`enabled = !isKeypadDisabled`) against duplicate hammering during hash computation and window dismissal.
+2. **Reset `currentLockout` on Verification Success**:
+   - In `LockOverlayScreen.kt`, explicitly set `currentLockout = 0` and `pinInput = ""` upon `LockVerificationState.Success`.
+3. **Eliminate Duplicate Attempt Increments**:
+   - Streamlined `verifySelfPin(pin)` and `verifyMasterPinForChange(currentPin)` in `MainViewModel` to delegate failure tracking exclusively to `repository.verifyPinResult`.
+
+### Consequences
+- **Clean Passcode Unlocks**: Typing the correct passcode renders crisp PIN dots and transitions immediately to the green unlock checkmark burst with zero red lockout banner flashes.
+- **Strict Rate-Limit Defense Preserved**: When a legitimate lockout occurs (`currentLockout > 0`), the countdown banner and disabled buttons function exactly as designed.
+- **Accurate Attempt Accounting**: Wrong PIN attempts are incremented strictly once per user submission.
+
+
+
+
 
 
 

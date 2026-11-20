@@ -32,11 +32,21 @@ class BootReceiver : BroadcastReceiver() {
                     val attempts = dataStore.globalFailedAttemptsFlow.first()
                     val wallClockExpiry = dataStore.globalLockoutWallClockTimestampFlow.first()
                     val durationMs = dataStore.globalLockoutDurationMsFlow.first()
-                    SessionManager.syncPersistedLockout(
-                        attempts = attempts,
-                        wallClockExpiryMs = wallClockExpiry,
-                        durationRemainingMs = durationMs
-                    )
+                    val now = System.currentTimeMillis()
+                    if (wallClockExpiry in 1..now || (wallClockExpiry == 0L && durationMs > 0L)) {
+                        dataStore.saveGlobalLockout(attempts, 0L, 0L)
+                        SessionManager.syncPersistedLockout(
+                            attempts = attempts,
+                            wallClockExpiryMs = 0L,
+                            durationRemainingMs = 0L
+                        )
+                    } else {
+                        SessionManager.syncPersistedLockout(
+                            attempts = attempts,
+                            wallClockExpiryMs = wallClockExpiry,
+                            durationRemainingMs = durationMs
+                        )
+                    }
                 } catch (_: Exception) {
                 } finally {
                     pendingResult.finish()

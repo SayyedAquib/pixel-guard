@@ -276,4 +276,27 @@ class LockOverlayScreenUiTest {
             composeTestRule.onNodeWithText(digit.toString()).assertExists()
         }
     }
+
+    @Test
+    fun unlockSuccessAndVerifying_neverDisplaysLockoutBanner() {
+        composeTestRule.setContent {
+            PixelAppLockTheme {
+                LockOverlayScreen(
+                    targetPackage = "com.pixelguard.bank",
+                    targetAppName = "Pixel Bank",
+                    targetIcon = null,
+                    verificationState = LockVerificationState.Success,
+                    isDecoyEnabled = false,
+                    isBiometricEnabled = false,
+                    lockoutSecondsProvider = { 0 },
+                    onUnlockSuccess = {},
+                    onPinSubmitted = {},
+                    onExitToHome = {}
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Locked out. Try again in 0s").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Locked out. Try again in 30s").assertDoesNotExist()
+    }
 }

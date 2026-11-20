@@ -45,6 +45,7 @@ class LockActivity : FragmentActivity() {
     private var appName: String = ""
     private var hasCapturedSelfieThisSession: Boolean = false
     private var isBiometricPromptActive: Boolean = false
+    private var activeBiometricPrompt: BiometricPrompt? = null
 
     @SuppressLint("MissingPermission")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -185,6 +186,11 @@ class LockActivity : FragmentActivity() {
                                     is com.pixelguard.applock.data.repository.VerifyPinResult.LockedOut -> {
                                         verificationState = LockVerificationState.Failed
                                         hapticManager.authFailed(currentPrefs.isHapticsEnabled)
+                                        val attempts = SessionManager.getFailedAttempts(targetPackage)
+                                        if (currentPrefs.isIntruderSelfieEnabled && attempts >= currentPrefs.failedAttemptsThreshold && !hasCapturedSelfieThisSession) {
+                                            hasCapturedSelfieThisSession = true
+                                            captureIntruder()
+                                        }
                                     }
                                     is com.pixelguard.applock.data.repository.VerifyPinResult.Unrecoverable -> {
                                         verificationState = LockVerificationState.Failed
@@ -233,6 +239,8 @@ class LockActivity : FragmentActivity() {
                 override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
                     super.onAuthenticationSucceeded(result)
                     isBiometricPromptActive = false
+                    activeBiometricPrompt = null
+                    SessionManager.resetFailedAttempts(targetPackage)
                     lifecycleScope.launch {
                         val prefs = AppLockApplication.instance.repository.preferences.first()
                         hapticManager.unlockSuccess(prefs.isHapticsEnabled)
@@ -243,23 +251,33 @@ class LockActivity : FragmentActivity() {
                 override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
                     super.onAuthenticationError(errorCode, errString)
                     isBiometricPromptActive = false
+                    activeBiometricPrompt = null
                     // When user cancels or chooses "Use PIN", gracefully fall back to PIN keypad
                 }
 
                 override fun onAuthenticationFailed() {
                     super.onAuthenticationFailed()
-                    isBiometricPromptActive = false
                     val attempts = SessionManager.incrementFailedAttempts(targetPackage)
                     lifecycleScope.launch {
                         val prefs = AppLockApplication.instance.repository.preferences.first()
                         hapticManager.authFailed(prefs.isHapticsEnabled)
-                        if (prefs.isIntruderSelfieEnabled && attempts >= prefs.failedAttemptsThreshold) {
+                        if (prefs.isIntruderSelfieEnabled && attempts >= prefs.failedAttemptsThreshold && !hasCapturedSelfieThisSession) {
+                            hasCapturedSelfieThisSession = true
+                            try {
+                                activeBiometricPrompt?.cancelAuthentication()
+                            } catch (_: Exception) {}
+                            activeBiometricPrompt = null
+                            isBiometricPromptActive = false
+                            transitionToVisible(targetPackage, isBiometric = false, hasCapturedSelfie = true)
+                            // Allow Face Unlock HAL 200ms to cleanly release Camera 1 before silent capture
+                            kotlinx.coroutines.delay(200L)
                             captureIntruder()
                         }
                     }
                 }
             }
         )
+        activeBiometricPrompt = biometricPrompt
 
         val promptInfo = BiometricPrompt.PromptInfo.Builder()
             .setTitle("Unlock $appName")
@@ -290,6 +308,7 @@ class LockActivity : FragmentActivity() {
     }
 
     private fun unlockAndFinish() {
+        SessionManager.resetFailedAttempts(targetPackage)
         if (intent.action == ACTION_PAUSE_REQUEST) {
             val minutes = intent.getIntExtra(EXTRA_PAUSE_MINUTES, 15)
             SessionManager.pauseProtection(minutes)
@@ -342,7 +361,12 @@ class LockActivity : FragmentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        try {
+            activeBiometricPrompt?.cancelAuthentication()
+        } catch (_: Exception) {}
+        activeBiometricPrompt = null
         isBiometricPromptActive = false
+        hasCapturedSelfieThisSession = false
         if (state.currentTargetPackage == targetPackage) {
             transitionToIdle()
         }
@@ -372,14 +396,17 @@ class LockActivity : FragmentActivity() {
     }
 
     private fun captureIntruder() {
-        val cameraCapture = SilentCameraCapture(this)
+        val appContext = applicationContext
+        val currentTargetPkg = targetPackage
+        val currentAppName = appName
+        val cameraCapture = SilentCameraCapture(appContext)
         cameraCapture.captureIntruderPhoto { photoFile ->
-            lifecycleScope.launch {
+            AppLockApplication.instance.applicationScope.launch {
                 val record = IntruderRecord(
                     id = UUID.randomUUID().toString(),
                     timestamp = System.currentTimeMillis(),
-                    targetPackageName = targetPackage,
-                    targetAppName = appName,
+                    targetPackageName = currentTargetPkg,
+                    targetAppName = currentAppName,
                     photoPath = photoFile.absolutePath
                 )
                 AppLockApplication.instance.repository.addIntruderRecord(record)

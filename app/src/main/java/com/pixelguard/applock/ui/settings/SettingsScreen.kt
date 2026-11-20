@@ -108,7 +108,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun SettingsScreen(
     viewModel: MainViewModel,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onNavigateToIntruders: () -> Unit = {}
 ) {
     val prefs by viewModel.preferences.collectAsState()
     val context = LocalContext.current
@@ -375,6 +376,17 @@ fun SettingsScreen(
                         }
                     }
                 )
+
+                if (prefs.isIntruderSelfieEnabled) {
+                    val intruders by viewModel.intruderRecords.collectAsState()
+                    SettingsActionRow(
+                        title = "View Intruder Photos",
+                        subtitle = if (intruders.isEmpty()) "No unauthorized attempts recorded" else "${intruders.size} unauthorized attempt(s) recorded",
+                        icon = Icons.Default.CameraAlt,
+                        badgeText = if (intruders.isNotEmpty()) "${intruders.size}" else null,
+                        onClick = onNavigateToIntruders
+                    )
+                }
 
                 HorizontalDivider(
                     modifier = Modifier.padding(vertical = 12.dp),
@@ -1558,6 +1570,7 @@ fun SettingsActionRow(
     title: String,
     subtitle: String,
     icon: ImageVector,
+    badgeText: String? = null,
     onClick: () -> Unit
 ) {
     Row(
@@ -1582,11 +1595,29 @@ fun SettingsActionRow(
         }
         Spacer(modifier = Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                fontWeight = FontWeight.SemiBold,
-                style = MaterialTheme.typography.titleMedium
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = title,
+                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.titleMedium
+                )
+                if (badgeText != null) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(MaterialTheme.colorScheme.error.copy(alpha = 0.15f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = badgeText,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            }
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodySmall,
