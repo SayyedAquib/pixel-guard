@@ -65,6 +65,7 @@
 - Expose state from ViewModels using `StateFlow<T>` via `.asStateFlow()`.
 - Never mutate state directly from composables; emit intents/callbacks to the ViewModel.
 - Coordinate in-memory session unlock state strictly through `SessionManager`.
+- Always make state transitions explicit via typed `sealed interface` hierarchies (`AppSessionState`, `RateLimitState`, `LockActivityState`, `ForegroundMonitoringState`, `AppGateState`, `NotificationShieldState`, `OnboardingStep`, `CameraCaptureState`); never encode state spaces into combinations of multiple nullable flags, timestamps, or disjoint variables.
 
 ## Testing Rules
 - Test cryptographic hashing, salt generation, and verification logic with unit tests.

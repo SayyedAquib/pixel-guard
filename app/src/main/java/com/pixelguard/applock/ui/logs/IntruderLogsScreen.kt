@@ -430,7 +430,7 @@ fun rememberDecryptedBitmap(photoPath: String, maxDimension: Int = 400): android
                         } else {
                             bytes
                         }
-                    } catch (_: Exception) {
+                    } catch (_: Throwable) {
                         bytes
                     }
                     if (decryptedBytes != null) {

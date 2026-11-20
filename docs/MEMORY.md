@@ -475,6 +475,14 @@
         - **WP-20**: Published standalone `docs/PRIVACY_POLICY.md` (offline-only, zero network permissions, local AES-256-GCM encryption) and `docs/STORE_SUBMISSION.md` (FGS `specialUse` answers, 60s video demonstration script, Data Safety answers, permissions justification table, and store listing metadata). Cleaned legacy accessibility strings in `strings.xml`.
         - **Verification**: Clean compilation of production release APK (`app-release.apk`, 5.48 MB) with R8 minification, resource shrinking, ProGuard source maps, and 0 lint/compiler errors.
 
+    12. **Explicit State Machine Architecture & Elimination of Implicit Flags (ADR 061)**:
+        - **Comprehensive State Machine Audit**: Identified 9 implicit state machines spanning domain logic, services, camera hardware, and UI presentation where behavior was governed by loosely coupled flags, timestamps, and disjoint booleans.
+        - **Typed Sealed Interfaces**: Created 8 explicit `sealed interface` hierarchies (`AppSessionState`, `RateLimitState`, `LockActivityState`, `CameraCaptureState`, `ForegroundMonitoringState`, `AppGateState`, `NotificationShieldState`, `OnboardingStep`).
+        - **Domain Refactoring**: Rewrote `SessionManager.isTemporarilyUnlocked` to evaluate through `getSessionState()` and `isLockedOut` / `getRemainingLockoutSeconds` to evaluate through `getRateLimitState()`, centralizing progressive lockout math.
+        - **Camera & Service Hardening**: Instrumented `SilentCameraCapture` with explicit pipeline transitions and thermal cooldown evaluation; exposed `monitoringState` from `AppLockForegroundService` and `shieldState` from `NotificationShieldService`.
+        - **UI & Gate Cleanup**: Replaced ad-hoc `isAuthenticated` and `isPinConfigured` booleans in `MainActivity` with `AppGateState`; removed shadow flags in `LockOverlayScreen`; refactored `OnboardingScreen` buttons with `OnboardingStep.resolve()`.
+        - **Automated Verification**: Authored `StateMachineTest.kt` with 13 comprehensive unit tests verifying all state transitions, invariants, and 100% backwards compatibility.
+
 ## Next Steps
 - When Google Pixel 9 is reconnected via ADB (`adb connect` or USB), execute:
   `adb install -r -d "app\build\outputs\apk\release\app-release.apk"`

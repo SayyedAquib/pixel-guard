@@ -1823,6 +1823,44 @@ Phase 2 of the production-readiness roadmap targeted service hardening, backgrou
 - 100% test pass rate across all unit and Robolectric tests (`testDebugUnitTest`).
 - Clean production release build (`app-release.apk`) generated with R8 optimization, resource shrinking, and stripped debug logs.
 
+---
+
+## ADR 061: Explicit State Machine Architecture & Elimination of Implicit Flags
+### Date
+2026-11-20
+### Status
+Accepted
+### Context
+Prior to this decision, critical subsystems across Pixel Guard relied on implicit state machines—sets of loosely coupled boolean flags, timestamps, and disjoint variables whose valid combinations were never declared, validated, or enforced:
+1. **Per-App Session Lifecycle (`SessionManager`)**: Per-app unlock states were calculated on-the-fly through combinations of `unlockedSessions[pkg]`, `exitTimestamps[pkg]`, `currentForegroundPackage`, `pauseUntilTimestamp`, and wall-clock vs monotonic thresholds. Five distinct states existed implicitly (`Locked`, `ActiveForeground`, `TransitionBuffer`, `GracePeriod`, `Expired`), making race conditions and state leakage difficult to trace.
+2. **Progressive Rate Limiting (`SessionManager`)**: Magic numbers inside conditional blocks mapped failed attempt counters to progressive penalty durations (1-4 tries, 5 tries for 30s, 8 tries for 60s, 10+ tries for 300s) without an explicit state machine.
+3. **Lock Screen Presentation Lifecycle (`LockActivity`)**: Disconnected `@Volatile` companion properties (`isShowing`, `isLaunching`, `activeTargetPackage`) and instance variables (`isBiometricPromptActive`, `hasCapturedSelfieThisSession`) could become desynchronized during rapid activity recreation or unexpected process terminations.
+4. **Keypad & Overlay State (`LockOverlayScreen`)**: `LockVerificationState` existed as an enum, but UI logic maintained disconnected shadow boolean flags (`isUnlocked`, `isVerifying`, `isKeypadDisabled`) that could lag or desynchronize from verification emissions.
+5. **Foreground Monitoring Loop (`AppLockForegroundService`)**: Background polling states were governed by loose flags (`isCachesReady`, `isScreenInteractive`, `monitoringJob != null`, `lastPackage`) rather than an explicit lifecycle model.
+6. **Self-Authentication Gate (`MainActivity` / `AppLockRoot`)**: The self-lock gate was controlled by an ad-hoc boolean (`isAuthenticated`), tri-state preference (`isPinConfigured: Boolean?`), and lifecycle timestamp math without an explicit gate state.
+7. **Headless Camera Pipeline (`SilentCameraCapture`)**: A 7-step hardware capture pipeline (Idle -> Cooldown -> Opening -> Configuring -> Capturing -> Processing -> Completed/Failed) was governed by raw atomic booleans and callback chains.
+8. **Notification Shield Readiness (`NotificationShieldService`)**: Nullability of `cachedPreferences` served as an undocumented tri-state discriminator between cold-start fallback, snapshot readiness, and active reactive cache.
+9. **Onboarding Wizard Flow (`OnboardingScreen`)**: Step resolution, primary button copy, and layout dispatch were computed through nested multi-boolean `when` clauses.
+
+### Decision
+Elevate all 9 implicit state machines into explicit, strongly-typed Kotlin `sealed interface` hierarchies with zero behavioral breaking changes:
+1. **`AppSessionState` (`domain/model/`)**: Explicit states `Locked`, `ActiveForeground`, `TransitionBuffer`, `GracePeriod`, `Expired`, and `Paused`. `SessionManager.getSessionState()` evaluates the state deterministically, while `isTemporarilyUnlocked()` delegates cleanly.
+2. **`RateLimitState` (`domain/model/`)**: Explicit states `Unrestricted`, `Warning`, and progressive `LockedOut` tiers (`SoftLockout`, `MediumLockout`, `ExtendedLockout`). `SessionManager.getRateLimitState()` centralizes all rate-limiting calculations.
+3. **`LockActivityState` (`ui/lock/`)**: Explicit states `Idle`, `Launching`, `Visible`, and `Dismissed`. Synchronized with companion properties (`isShowing`, `isLaunching`, `activeTargetPackage`) ensuring 100% backward compatibility for all callers.
+4. **`LockOverlayState` (`service/overlay/`)**: Removed shadow flags (`isUnlocked`, `isVerifying`), driving presentation directly from `effectiveVerificationState` and `RateLimitState`.
+5. **`ForegroundMonitoringState` (`service/`)**: Explicit states `Uninitialized`, `StandbyScreenOff`, `Active`, `PermissionRevoked`, and `Stopped`. Exposed as reactive `StateFlow` from `AppLockForegroundService`.
+6. **`AppGateState` (`ui/main/`)**: Explicit states `Loading`, `FirstTimeOnboarding`, `Locked`, and `Authenticated` governing `MainActivity` self-lock presentation.
+7. **`CameraCaptureState` (`service/camera/`)**: Explicit states `Idle`, `InCooldown`, `OpeningCamera`, `ConfiguringSession`, `CapturingStill`, `ProcessingImage`, `Completed`, and `Failed`.
+8. **`NotificationShieldState` (`service/`)**: Explicit states `Uninitialized`, `SnapshotReady`, and `Active`.
+9. **`OnboardingStep` (`ui/onboarding/`)**: Explicit states `GrantUsageAccess`, `GrantOverlay`, `SetupMasterPin`, `ConfirmRecoveryCode`, and `ReadyToStart` with deterministic `OnboardingStep.resolve()`.
+
+### Consequences
+- **UX Elevation**: Zero state desynchronization. Elimination of UI glitches (e.g. keypad taps accepted during lockout transitions, or stale verification states).
+- **DX Elevation**: Replaced multi-flag mental models with typed sealed interfaces. IDE enforces exhaustive `when` matching on all state additions or modifications.
+- **AX Elevation**: AI agents inspect typed, self-documenting data classes (e.g. `RateLimitState.LockedOut.SoftLockout(failedAttempts=5, remainingSeconds=28)`) rather than reverse-engineering combinations of timestamps and booleans.
+- **Backwards Compatibility**: 100% API compatibility preserved for all existing test suites, companion properties, and service consumers.
+
+
 
 
 

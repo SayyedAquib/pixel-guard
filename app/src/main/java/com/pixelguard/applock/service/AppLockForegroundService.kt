@@ -30,6 +30,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -38,6 +41,9 @@ class AppLockForegroundService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var monitoringJob: Job? = null
+
+    private val _monitoringState = MutableStateFlow<ForegroundMonitoringState>(ForegroundMonitoringState.Uninitialized)
+    val monitoringState: StateFlow<ForegroundMonitoringState> = _monitoringState.asStateFlow()
 
     private var lastPackage: String = ""
     private var cachedLockedPackages: Set<String> = emptySet()
@@ -53,11 +59,13 @@ class AppLockForegroundService : Service() {
                     isScreenInteractive = false
                     monitoringJob?.cancel()
                     monitoringJob = null
+                    _monitoringState.value = ForegroundMonitoringState.StandbyScreenOff(lastPackage)
                     SessionManager.onScreenOff()
                 }
                 Intent.ACTION_SCREEN_ON -> {
                     if (BuildConfig.DEBUG) Log.i(TAG, "Screen ON event: resuming detection loop")
                     isScreenInteractive = true
+                    _monitoringState.value = ForegroundMonitoringState.Active(lastPackage, isCachesReady)
                     if (monitoringJob == null || monitoringJob?.isActive == false) {
                         startMonitoringLoop()
                     }
@@ -152,10 +160,12 @@ class AppLockForegroundService : Service() {
                     if (BuildConfig.DEBUG) {
                         Log.w(TAG, "Usage access revoked. Backing off monitoring loop.")
                     }
+                    _monitoringState.value = ForegroundMonitoringState.PermissionRevoked
                     delay(5000L)
                     continue
                 }
                 if (isScreenInteractive) {
+                    _monitoringState.value = ForegroundMonitoringState.Active(lastPackage, isCachesReady)
                     val currentPackage = AppUsageDetector.queryLatestResumedPackage(this@AppLockForegroundService)
                     if (currentPackage != null) {
                         launch(Dispatchers.Main) {
@@ -253,11 +263,10 @@ class AppLockForegroundService : Service() {
             }
             return false
         }
-        if (LockActivity.isShowing || (LockActivity.isLaunching && LockActivity.activeTargetPackage == packageName)) {
+        if (LockActivity.state.isShowing || (LockActivity.state.isLaunching && LockActivity.state.currentTargetPackage == packageName)) {
             return false
         }
-        LockActivity.isLaunching = true
-        LockActivity.activeTargetPackage = packageName
+        LockActivity.transitionToLaunching(packageName)
         val lockIntent = Intent(this, LockActivity::class.java).apply {
             putExtra(LockActivity.EXTRA_TARGET_PACKAGE, packageName)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or
@@ -268,7 +277,7 @@ class AppLockForegroundService : Service() {
             startActivity(lockIntent)
             true
         } catch (e: Exception) {
-            LockActivity.isLaunching = false
+            LockActivity.transitionToIdle()
             if (BuildConfig.DEBUG) android.util.Log.e("AppLockFGS", "Failed to launch LockActivity: ${e.message}")
             false
         }
@@ -296,6 +305,7 @@ class AppLockForegroundService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        _monitoringState.value = ForegroundMonitoringState.Stopped
         try {
             unregisterReceiver(screenReceiver)
         } catch (_: Exception) {}

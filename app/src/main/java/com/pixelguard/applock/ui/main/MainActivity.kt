@@ -133,7 +133,7 @@ fun AppLockRoot(
     val navController = rememberNavController()
     val permissionStatus by viewModel.permissionStatus.collectAsState()
     val isPinConfigured by viewModel.hasPinSet.collectAsState()
-    var isAuthenticated by remember { mutableStateOf(false) }
+    var gateState by remember { mutableStateOf<AppGateState>(AppGateState.Loading) }
     var lastStopTimestamp by remember { mutableStateOf(0L) }
     val selfLockThresholdMs = 30_000L
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
@@ -161,11 +161,11 @@ fun AppLockRoot(
                         0L
                     }
                     if (lastStopTimestamp > 0L && elapsed > selfLockThresholdMs) {
-                        isAuthenticated = false
+                        gateState = AppGateState.Locked(allowBio, com.pixelguard.applock.domain.usecase.SessionManager.getRemainingLockoutSeconds(context.packageName))
                     }
-                    if (!isAuthenticated && allowBio) {
+                    if (gateState is AppGateState.Locked && allowBio) {
                         onPromptBiometric(
-                            { isAuthenticated = true },
+                            { gateState = AppGateState.Authenticated },
                             { /* user cancelled, stays on PIN screen */ }
                         )
                     }
@@ -178,10 +178,15 @@ fun AppLockRoot(
         }
     }
 
-    LaunchedEffect(isPinConfigured) {
-        if (isPinConfigured == false) {
-            // First-time onboarding: allow entry to setup wizard without PIN gate
-            isAuthenticated = true
+    LaunchedEffect(isPinConfigured, allowBio) {
+        when (isPinConfigured) {
+            null -> gateState = AppGateState.Loading
+            false -> gateState = AppGateState.FirstTimeOnboarding
+            true -> {
+                if (gateState !is AppGateState.Authenticated) {
+                    gateState = AppGateState.Locked(allowBio, com.pixelguard.applock.domain.usecase.SessionManager.getRemainingLockoutSeconds(context.packageName))
+                }
+            }
         }
     }
 
@@ -206,7 +211,7 @@ fun AppLockRoot(
             }
         }
 
-        if (!isAuthenticated && isPinConfigured == true) {
+        if (gateState is AppGateState.Locked) {
             val scope = rememberCoroutineScope()
             var verificationState by remember { mutableStateOf(com.pixelguard.applock.service.overlay.LockVerificationState.Idle) }
             LockOverlayScreen(
@@ -227,7 +232,7 @@ fun AppLockRoot(
                             {
                                 hapticManager.unlockSuccess(prefs.isHapticsEnabled)
                                 viewModel.resetSelfFailedAttempts()
-                                isAuthenticated = true
+                                gateState = AppGateState.Authenticated
                             },
                             { /* user cancelled, stays on PIN screen */ }
                         )
@@ -240,7 +245,7 @@ fun AppLockRoot(
                         if (isCorrect) {
                             verificationState = com.pixelguard.applock.service.overlay.LockVerificationState.Success
                             hapticManager.unlockSuccess(prefs.isHapticsEnabled)
-                            isAuthenticated = true
+                            gateState = AppGateState.Authenticated
                         } else {
                             verificationState = com.pixelguard.applock.service.overlay.LockVerificationState.Failed
                             hapticManager.authFailed(prefs.isHapticsEnabled)
@@ -251,7 +256,7 @@ fun AppLockRoot(
                     (context as? Activity)?.finish()
                 }
             )
-        } else if (isPinConfigured != null) {
+        } else if (gateState is AppGateState.Authenticated || gateState is AppGateState.FirstTimeOnboarding) {
             NavHost(
                 navController = navController,
                 startDestination = startDestination

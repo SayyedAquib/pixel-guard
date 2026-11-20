@@ -426,21 +426,23 @@ fun OnboardingScreen(
             } else {
                 Spacer(modifier = Modifier.height(28.dp))
 
-                val buttonText = when {
-                    permissionStatus.isAllGranted -> "Get Started"
-                    !permissionStatus.hasUsagePermission -> "Turn On App Detection"
-                    !permissionStatus.hasOverlayPermission -> "Enable Display Over Other Apps"
-                    else -> "Turn On App Detection"
+                val currentStep = OnboardingStep.resolve(permissionStatus, isPinConfigured, generatedRecoveryCode)
+                val buttonText = when (currentStep) {
+                    is OnboardingStep.ReadyToStart -> "Get Started"
+                    is OnboardingStep.GrantUsageAccess -> "Turn On App Detection"
+                    is OnboardingStep.GrantOverlay -> "Enable Display Over Other Apps"
+                    is OnboardingStep.SetupMasterPin,
+                    is OnboardingStep.ConfirmRecoveryCode -> "Get Started"
                 }
 
                 Button(
                     onClick = {
-                        if (permissionStatus.isAllGranted) {
-                            onComplete()
-                        } else if (!permissionStatus.hasUsagePermission) {
-                            openUsageAccessSettings(context)
-                        } else if (!permissionStatus.hasOverlayPermission) {
-                            openOverlaySettings(context)
+                        when (currentStep) {
+                            is OnboardingStep.ReadyToStart -> onComplete()
+                            is OnboardingStep.GrantUsageAccess -> openUsageAccessSettings(context)
+                            is OnboardingStep.GrantOverlay -> openOverlaySettings(context)
+                            is OnboardingStep.SetupMasterPin,
+                            is OnboardingStep.ConfirmRecoveryCode -> onComplete()
                         }
                     },
                     modifier = Modifier

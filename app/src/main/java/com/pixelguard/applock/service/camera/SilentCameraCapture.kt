@@ -30,6 +30,20 @@ class SilentCameraCapture(private val context: Context) {
     private var watchdogRunnable: Runnable? = null
     private val isClosed = AtomicBoolean(false)
 
+    @Volatile
+    var currentState: CameraCaptureState = CameraCaptureState.Idle
+        private set
+
+    var onStateChanged: ((CameraCaptureState) -> Unit)? = null
+
+    private fun transitionTo(newState: CameraCaptureState) {
+        currentState = newState
+        onStateChanged?.invoke(newState)
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, "CameraCaptureState -> $newState")
+        }
+    }
+
     @SuppressLint("MissingPermission")
     fun captureIntruderPhoto(onPhotoCaptured: (File) -> Unit) {
         // H-8: Verify CAMERA permission is granted before touching CameraManager
@@ -63,6 +77,7 @@ class SilentCameraCapture(private val context: Context) {
 
         val watchdog = Runnable {
             if (BuildConfig.DEBUG) Log.w(TAG, "Intruder photo capture timed out after 4000ms; forcing hardware cleanup")
+            transitionTo(CameraCaptureState.Failed("Intruder photo capture timed out after 4000ms"))
             cleanup()
         }
         watchdogRunnable = watchdog
@@ -83,11 +98,14 @@ class SilentCameraCapture(private val context: Context) {
                     image.close()
 
                     try {
+                        transitionTo(CameraCaptureState.ProcessingImage(outputFile.name))
                         val cryptoManager = com.pixelguard.applock.AppLockApplication.instance.cryptoManager
                         val encryptedBytes = cryptoManager.encryptToFileBytes(bytes)
                         FileOutputStream(outputFile).use { it.write(encryptedBytes) }
+                        transitionTo(CameraCaptureState.Completed(outputFile.absolutePath))
                         onPhotoCaptured(outputFile)
                     } catch (e: Exception) {
+                        transitionTo(CameraCaptureState.Failed("Failed to save encrypted intruder selfie: ${e.message}", e))
                         if (BuildConfig.DEBUG) Log.e(TAG, "Failed to save encrypted intruder selfie: ${e.message}")
                     } finally {
                         cleanup()
@@ -97,6 +115,7 @@ class SilentCameraCapture(private val context: Context) {
         }
 
         try {
+            transitionTo(CameraCaptureState.OpeningCamera(frontCameraId))
             cameraManager.openCamera(frontCameraId, object : CameraDevice.StateCallback() {
                 override fun onOpened(camera: CameraDevice) {
                     if (isClosed.get()) {
@@ -109,20 +128,24 @@ class SilentCameraCapture(private val context: Context) {
                         cleanup()
                         return
                     }
+                    transitionTo(CameraCaptureState.ConfiguringSession)
                     createCaptureSession(camera, outputFile)
                 }
 
                 override fun onDisconnected(camera: CameraDevice) {
+                    transitionTo(CameraCaptureState.Failed("Camera disconnected"))
                     camera.close()
                     cleanup()
                 }
 
                 override fun onError(camera: CameraDevice, error: Int) {
+                    transitionTo(CameraCaptureState.Failed("CameraDevice error code: $error"))
                     camera.close()
                     cleanup()
                 }
             }, backgroundHandler)
         } catch (e: Exception) {
+            transitionTo(CameraCaptureState.Failed("Error opening front camera: ${e.message}", e))
             if (BuildConfig.DEBUG) Log.e(TAG, "Error opening front camera: ${e.message}")
             cleanup()
         }
@@ -150,19 +173,23 @@ class SilentCameraCapture(private val context: Context) {
                     }
                     captureSession = session
                     try {
+                        transitionTo(CameraCaptureState.CapturingStill)
                         session.capture(captureRequestBuilder.build(), null, backgroundHandler)
                     } catch (e: Exception) {
+                        transitionTo(CameraCaptureState.Failed("Failed to trigger capture request: ${e.message}", e))
                         if (BuildConfig.DEBUG) Log.e(TAG, "Failed to trigger capture request: ${e.message}")
                         cleanup()
                     }
                 }
 
                 override fun onConfigureFailed(session: CameraCaptureSession) {
+                    transitionTo(CameraCaptureState.Failed("CameraCaptureSession configuration failed"))
                     session.close()
                     cleanup()
                 }
             }, backgroundHandler)
         } catch (e: Exception) {
+            transitionTo(CameraCaptureState.Failed("Session creation failed: ${e.message}", e))
             if (BuildConfig.DEBUG) Log.e(TAG, "Session creation failed: ${e.message}")
             cleanup()
         }
@@ -204,12 +231,24 @@ class SilentCameraCapture(private val context: Context) {
         @Volatile private var lastCaptureTimestampMs: Long = 0L
 
         /**
+         * Evaluates the explicit [CameraCaptureState] of the camera hardware (Idle, CapturingStill, InCooldown).
+         */
+        fun getHardwareState(currentTimeMs: Long = System.currentTimeMillis()): CameraCaptureState {
+            if (isCapturing.get()) return CameraCaptureState.CapturingStill
+            val elapsed = currentTimeMs - lastCaptureTimestampMs
+            return if (lastCaptureTimestampMs > 0L && elapsed < CAPTURE_COOLDOWN_MS) {
+                CameraCaptureState.InCooldown(elapsed, CAPTURE_COOLDOWN_MS)
+            } else {
+                CameraCaptureState.Idle
+            }
+        }
+
+        /**
          * Checks whether a new intruder photo can be captured based on hardware concurrency
          * lock and the 10-second thermal cooldown.
          */
         fun canCapture(currentTimeMs: Long = System.currentTimeMillis()): Boolean {
-            if (isCapturing.get()) return false
-            return (currentTimeMs - lastCaptureTimestampMs) >= CAPTURE_COOLDOWN_MS
+            return getHardwareState(currentTimeMs) is CameraCaptureState.Idle
         }
 
         /**

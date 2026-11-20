@@ -59,27 +59,36 @@ com.pixelguard.applock/
 │       ├── AppLockRepository.kt   # Repository domain contract
 │       └── AppLockRepositoryImpl.kt # PackageManager loader & DataStore coordination
 ├── domain/
+│   ├── model/
+│   │   ├── AppSessionState.kt     # Explicit per-app session state (Locked, Active, Grace, Expired, etc.)
+│   │   └── RateLimitState.kt      # Progressive lockout tiers (Unrestricted, Warning, Soft/Medium/Extended)
 │   └── usecase/
-│       └── SessionManager.kt      # State coordinator for grace periods & session unlocks
+│       └── SessionManager.kt      # State coordinator evaluating AppSessionState & RateLimitState
 ├── service/
 │   ├── AppLockForegroundService.kt    # Sticky foreground detection & lifecycle service
+│   ├── ForegroundMonitoringState.kt   # Explicit polling state (Uninitialized, StandbyScreenOff, Active, etc.)
+│   ├── NotificationShieldState.kt     # Explicit cache readiness state (Uninitialized, SnapshotReady, Active)
 │   ├── usage/
 │   │   └── AppUsageDetector.kt        # UsageStatsManager foreground package detector
 │   ├── NotificationShieldService.kt   # NotificationListenerService privacy filter
 │   ├── BootReceiver.kt                # BOOT_COMPLETED broadcast receiver
 │   ├── camera/
+│   │   ├── CameraCaptureState.kt      # Explicit 7-step camera hardware pipeline state
 │   │   └── SilentCameraCapture.kt     # Headless Camera2 front-facing photo capture
 │   └── overlay/
 │       └── LockOverlayScreen.kt       # Compose lock interface & decoy crash dialog
 └── ui/
     ├── main/
     │   ├── MainActivity.kt            # Edge-to-edge entry point & 120Hz display mode setter
+    │   ├── AppGateState.kt            # Explicit self-lock gate state (Loading, Onboarding, Locked, Authenticated)
     │   ├── MainViewModel.kt           # StateFlow provider & business logic
     │   └── MainScreen.kt              # App management dashboard & 1-tap batch controls
     ├── lock/
-    │   └── LockActivity.kt            # Dedicated full-screen lock container with zero-tap biometrics
+    │   ├── LockActivity.kt            # Dedicated full-screen lock container with zero-tap biometrics
+    │   └── LockActivityState.kt       # Explicit activity lifecycle state (Idle, Launching, Visible, Dismissed)
     ├── onboarding/
-    │   └── OnboardingScreen.kt        # Android 17 permission setup wizard
+    │   ├── OnboardingScreen.kt        # Android 17 permission setup wizard
+    │   └── OnboardingStep.kt          # Explicit onboarding step state machine
     ├── settings/
     │   └── SettingsScreen.kt          # Security, timing, and stealth toggles
     ├── logs/

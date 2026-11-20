@@ -1,5 +1,7 @@
 package com.pixelguard.applock.domain.usecase
 
+import com.pixelguard.applock.domain.model.AppSessionState
+import com.pixelguard.applock.domain.model.RateLimitState
 import org.json.JSONObject
 import java.util.Calendar
 import java.util.concurrent.ConcurrentHashMap
@@ -109,27 +111,38 @@ object SessionManager {
         }
     }
 
-    fun isTemporarilyUnlocked(packageName: String, effectiveGraceSeconds: Int): Boolean {
-        if (isPaused()) return true // Protection paused via Quick Settings tile
+    /**
+     * Evaluates the explicit [AppSessionState] for the specified package.
+     */
+    fun getSessionState(packageName: String, effectiveGraceSeconds: Int): AppSessionState {
+        if (isPaused()) {
+            return AppSessionState.Paused(getRemainingPauseMinutes())
+        }
 
-        val unlockTime = unlockedSessions[packageName] ?: return false
+        val unlockTime = unlockedSessions[packageName] ?: return AppSessionState.Locked
 
         // 1. If currently in foreground, the app is actively in use — NEVER relock while using!
         if (currentForegroundPackage == packageName) {
-            return true
+            return AppSessionState.ActiveForeground(packageName)
         }
 
         val nowTime = now()
         val exitTime = exitTimestamps[packageName]
 
         // 2. Initial launch transition buffer (3s) ONLY before the user has navigated away (exitTime == null)
-        if (exitTime == null && (nowTime - unlockTime) in 0 until 3000L) {
-            return true
+        val elapsedSinceUnlock = nowTime - unlockTime
+        if (exitTime == null && elapsedSinceUnlock in 0 until 3000L) {
+            return AppSessionState.TransitionBuffer(packageName, elapsedSinceUnlock)
         }
 
         // 3. Until Screen Off mode (-2): Stays unlocked as long as screen is on (onScreenOff wipes everything)
         if (effectiveGraceSeconds == GRACE_UNTIL_SCREEN_OFF) {
-            return true
+            return AppSessionState.GracePeriod(
+                packageName = packageName,
+                elapsedSeconds = if (exitTime != null) (nowTime - exitTime) / 1000 else 0,
+                totalGraceSeconds = GRACE_UNTIL_SCREEN_OFF,
+                remainingSeconds = Long.MAX_VALUE
+            )
         }
 
         // 4. "Immediately" mode (0s or negative other than -2):
@@ -139,11 +152,28 @@ object SessionManager {
         // 5. Grace period counts down from when the user exited the app
         val baseExitTime = exitTime ?: unlockTime
         val elapsedSinceExit = (nowTime - baseExitTime) / 1000
-        val isUnlocked = elapsedSinceExit < effectiveSeconds
-        if (!isUnlocked) {
+        return if (elapsedSinceExit < effectiveSeconds) {
+            AppSessionState.GracePeriod(
+                packageName = packageName,
+                elapsedSeconds = elapsedSinceExit,
+                totalGraceSeconds = effectiveSeconds,
+                remainingSeconds = effectiveSeconds - elapsedSinceExit
+            )
+        } else {
+            AppSessionState.Expired(
+                packageName = packageName,
+                elapsedSinceExitSeconds = elapsedSinceExit,
+                allowedSeconds = effectiveSeconds
+            )
+        }
+    }
+
+    fun isTemporarilyUnlocked(packageName: String, effectiveGraceSeconds: Int): Boolean {
+        val state = getSessionState(packageName, effectiveGraceSeconds)
+        if (state is AppSessionState.Expired) {
             unlockedSessions.remove(packageName)
         }
-        return isUnlocked
+        return state.isUnlocked
     }
 
     fun isRecentlyUnlocked(packageName: String, thresholdMs: Long = 3000L): Boolean {
@@ -311,23 +341,42 @@ object SessionManager {
         return failedAttempts[GLOBAL_PACKAGE] ?: 0
     }
 
-    fun getRemainingLockoutSeconds(packageName: String): Int {
+    /**
+     * Evaluates the explicit [RateLimitState] for the specified package or global scope.
+     */
+    fun getRateLimitState(packageName: String): RateLimitState {
         val globalUntil = lockoutTimestamps[GLOBAL_PACKAGE] ?: 0L
         val pkgUntil = lockoutTimestamps[packageName] ?: 0L
         val effectiveUntil = maxOf(globalUntil, pkgUntil)
-        if (effectiveUntil <= 0L) return 0
-        val remainingMs = effectiveUntil - now()
-        return if (remainingMs > 0) ((remainingMs + 999) / 1000).toInt() else 0
+        val nowTime = now()
+        val remainingMs = if (effectiveUntil > nowTime) effectiveUntil - nowTime else 0L
+        val remainingSeconds = if (remainingMs > 0) ((remainingMs + 999) / 1000).toInt() else 0
+
+        val globalAttempts = failedAttempts[GLOBAL_PACKAGE] ?: 0
+        val pkgAttempts = failedAttempts[packageName] ?: 0
+        val effectiveAttempts = maxOf(globalAttempts, pkgAttempts)
+
+        if (remainingSeconds > 0) {
+            return when {
+                effectiveAttempts >= 10 -> RateLimitState.LockedOut.ExtendedLockout(effectiveAttempts, remainingSeconds)
+                effectiveAttempts >= 8 -> RateLimitState.LockedOut.MediumLockout(effectiveAttempts, remainingSeconds)
+                else -> RateLimitState.LockedOut.SoftLockout(effectiveAttempts, remainingSeconds)
+            }
+        }
+
+        return if (effectiveAttempts > 0) {
+            val attemptsUntil = if (effectiveAttempts < 5) 5 - effectiveAttempts else 0
+            RateLimitState.Warning(effectiveAttempts, attemptsUntil)
+        } else {
+            RateLimitState.Unrestricted
+        }
     }
 
-    fun isLockedOut(packageName: String): Boolean {
-        return getRemainingLockoutSeconds(packageName) > 0
-    }
+    fun getRemainingLockoutSeconds(packageName: String): Int = getRateLimitState(packageName).remainingLockoutSeconds
 
-    fun getAttemptsUntilLockout(packageName: String): Int {
-        val current = failedAttempts[GLOBAL_PACKAGE] ?: failedAttempts[packageName] ?: 0
-        return if (current < 5) 5 - current else 0
-    }
+    fun isLockedOut(packageName: String): Boolean = getRateLimitState(packageName).isLockedOut
+
+    fun getAttemptsUntilLockout(packageName: String): Int = getRateLimitState(packageName).attemptsUntilLockout
 
     fun resetFailedAttempts(packageName: String) {
         failedAttempts.remove(packageName)

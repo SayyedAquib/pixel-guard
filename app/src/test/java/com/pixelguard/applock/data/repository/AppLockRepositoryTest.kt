@@ -27,6 +27,7 @@ class AppLockRepositoryTest {
 
     @Before
     fun setUp() {
+        SessionManager.onLockoutChanged = null
         val context = RuntimeEnvironment.getApplication()
         dataStore = PreferencesDataStore(context)
         cryptoManager = CryptoManager().apply {
@@ -40,6 +41,7 @@ class AppLockRepositoryTest {
 
     @After
     fun tearDown() {
+        SessionManager.onLockoutChanged = null
         repository.cancelScope()
     }
 

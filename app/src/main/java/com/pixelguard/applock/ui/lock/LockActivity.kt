@@ -270,9 +270,11 @@ class LockActivity : FragmentActivity() {
 
         try {
             isBiometricPromptActive = true
+            transitionToVisible(targetPackage, isBiometric = true, hasCapturedSelfie = hasCapturedSelfieThisSession)
             biometricPrompt.authenticate(promptInfo)
         } catch (e: Exception) {
             isBiometricPromptActive = false
+            transitionToVisible(targetPackage, isBiometric = false, hasCapturedSelfie = hasCapturedSelfieThisSession)
             if (BuildConfig.DEBUG) android.util.Log.e("LockActivity", "Biometric authentication error: ${e.message}")
         }
     }
@@ -320,9 +322,7 @@ class LockActivity : FragmentActivity() {
 
     override fun onResume() {
         super.onResume()
-        isShowing = true
-        isLaunching = false
-        activeTargetPackage = targetPackage
+        transitionToVisible(targetPackage, isBiometricPromptActive, hasCapturedSelfieThisSession)
         // H-4 Resume Guard: Revalidate that target app was actually unlocked.
         // If an interrupting activity (phone call, system dialog) finishes and LockActivity resumes,
         // ensure target app remains locked unless an explicit successful unlock occurred.
@@ -336,18 +336,15 @@ class LockActivity : FragmentActivity() {
     override fun onPause() {
         super.onPause()
         if (!isBiometricPromptActive && !isChangingConfigurations) {
-            isShowing = false
-            isLaunching = false
+            transitionToIdle()
         }
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        isShowing = false
-        isLaunching = false
         isBiometricPromptActive = false
-        if (activeTargetPackage == targetPackage) {
-            activeTargetPackage = null
+        if (state.currentTargetPackage == targetPackage) {
+            transitionToIdle()
         }
     }
 
@@ -396,15 +393,55 @@ class LockActivity : FragmentActivity() {
         const val EXTRA_PAUSE_MINUTES = "extra_pause_minutes"
 
         @Volatile
-        var isShowing: Boolean = false
+        var state: LockActivityState = LockActivityState.Idle
             internal set
 
-        @Volatile
-        var isLaunching: Boolean = false
-            internal set
+        var isShowing: Boolean
+            get() = state.isShowing
+            internal set(value) {
+                if (value) {
+                    val pkg = activeTargetPackage ?: ""
+                    state = LockActivityState.Visible(pkg)
+                } else if (state is LockActivityState.Visible) {
+                    state = LockActivityState.Idle
+                }
+            }
 
-        @Volatile
-        var activeTargetPackage: String? = null
-            internal set
+        var isLaunching: Boolean
+            get() = state.isLaunching
+            internal set(value) {
+                if (value) {
+                    val pkg = activeTargetPackage ?: ""
+                    state = LockActivityState.Launching(pkg)
+                } else if (state is LockActivityState.Launching) {
+                    state = LockActivityState.Idle
+                }
+            }
+
+        var activeTargetPackage: String?
+            get() = state.currentTargetPackage
+            internal set(value) {
+                if (value == null) {
+                    state = LockActivityState.Idle
+                } else {
+                    state = when (val current = state) {
+                        is LockActivityState.Launching -> LockActivityState.Launching(value)
+                        is LockActivityState.Visible -> current.copy(targetPackage = value)
+                        else -> LockActivityState.Launching(value)
+                    }
+                }
+            }
+
+        fun transitionToLaunching(targetPackage: String) {
+            state = LockActivityState.Launching(targetPackage)
+        }
+
+        fun transitionToVisible(targetPackage: String, isBiometric: Boolean = false, hasCapturedSelfie: Boolean = false) {
+            state = LockActivityState.Visible(targetPackage, isBiometric, hasCapturedSelfie)
+        }
+
+        fun transitionToIdle() {
+            state = LockActivityState.Idle
+        }
     }
 }

@@ -32,6 +32,10 @@ class NotificationShieldService : NotificationListenerService() {
     @Volatile private var cachedLockedPackages: Set<String> = emptySet()
     @Volatile private var isObservingDataStore = false
 
+    @Volatile
+    var shieldState: NotificationShieldState = NotificationShieldState.Uninitialized
+        private set
+
     override fun onCreate() {
         super.onCreate()
         // Synchronous fail-closed snapshot before any notification arrives (PG-SRV-04)
@@ -48,6 +52,7 @@ class NotificationShieldService : NotificationListenerService() {
                 isPerAppGraceEnabled = snapshot.isPerAppGraceEnabled,
                 appGracePeriodsJson = snapshot.appGracePeriodsJson
             )
+            shieldState = NotificationShieldState.SnapshotReady(cachedLockedPackages.size)
         }
         startObservingDataStore()
     }
@@ -73,6 +78,7 @@ class NotificationShieldService : NotificationListenerService() {
                 }
                 .collect { prefs ->
                     cachedPreferences = prefs
+                    shieldState = NotificationShieldState.Active(cachedLockedPackages.size, prefs.isNotificationShieldEnabled)
                 }
         }
         scope.launch(Dispatchers.IO) {
@@ -82,6 +88,7 @@ class NotificationShieldService : NotificationListenerService() {
                 }
                 .collect { pkgs ->
                     cachedLockedPackages = pkgs
+                    shieldState = NotificationShieldState.Active(pkgs.size, cachedPreferences?.isNotificationShieldEnabled ?: false)
                 }
         }
     }

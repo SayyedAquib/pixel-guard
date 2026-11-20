@@ -159,6 +159,12 @@ Standard 4dp/8dp grid system:
 - **24-Hour Circular Schedule Dial**: Interactive circular day/night time visualizer (`Canvas` with `drawArc` and animated sweep angle) in the Night Lockdown sheet, rendering active lockdown hours, duration badge, and start/end time indicators.
 - **Pinch-to-Zoom Evidence Viewer**: Hardware-accelerated multi-touch zoom (`detectTransformGestures` supporting 1x to 3.5x magnification) and two-finger panning in the intruder log photo preview dialog.
 
+### Explicit State-Driven UI Choreography
+- **Lock Verification State**: Keypad inputs transition to `LockVerificationState.Verifying` upon the 6th digit, triggering visual spinner and disabling concurrent touches. `LockVerificationState.Success` drives the green checkmark burst, and `LockVerificationState.Failed` triggers the 3-stage elastic shake and fade choreography.
+- **Progressive Rate Limiting UI**: Driven by typed `RateLimitState` rather than magic number conditionals. `RateLimitState.Warning.isCautionBadgeVisible` displays the amber pre-lockout badge when $\le 2$ attempts remain. `RateLimitState.LockedOut` disables keypad discs, displays the penalty countdown banner, and renders the live linear progress penalty drain bar.
+- **Onboarding Progression**: `OnboardingStep` drives primary action button text ("Turn On App Detection" -> "Enable Display Over Other Apps" -> "Save Passcode & Finish" -> "Get Started") and dialog states deterministically without nested boolean flag evaluation.
+- **Self-Lock Gate**: `AppGateState` drives `MainActivity` transition between `Loading`, `FirstTimeOnboarding`, `Locked` (overlay active), and `Authenticated` (dashboard accessible).
+
 ### Internationalization & String Token Architecture
 - 100% of user-visible strings, dialog titles, button labels, badge strings, and accessibility content descriptions are externalized into `res/values/strings.xml`.
 - Structured into cohesive functional domains (`common_*`, `onboarding_*`, `main_*`, `settings_*`, `lock_*`, `intruders_*`).

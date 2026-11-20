@@ -126,6 +126,12 @@ Unit and service tests validate cryptography, rate limiting, background intercep
   - Cooldown window enforcement (10-second thermal delay between intruder photo attempts).
   - Hardware concurrency mutex (`isCapturing`) preventing overlapping Camera2 / ISP sessions during rapid failed PIN attempts.
   - Test fixture reset and timestamp bounds manipulation.
+- **`StateMachineTest`** (13 tests, `ADR 061`):
+  - `AppSessionState` evaluation across all 6 lifecycle states (`Locked`, `ActiveForeground`, `TransitionBuffer`, `GracePeriod`, `Expired`, `Paused`).
+  - `RateLimitState` progressive lockout evaluation (`Unrestricted`, `Warning` with caution badge calculation, `SoftLockout`, `MediumLockout`, `ExtendedLockout`).
+  - `CameraCaptureState` hardware states (`Idle`, `CapturingStill`, `InCooldown`, and cooldown expiration).
+  - `LockActivityState` presentation and lifecycle synchronization with companion properties (`isShowing`, `isLaunching`, `activeTargetPackage`).
+  - `OnboardingStep` deterministic step resolution across all setup permutations.
 - **`LockPreferencesTest`** (13 tests): Default value invariants (`isSettingsProtected == false`, `isRecentsMaskingEnabled == false`, `isBiometricsEnabled == true`, etc.), `AppSortOrder` and `LockType` enum completeness, mutation copy isolation, JSON-based PIN-only and notification mask evaluations, category overrides parsing, custom user & app tag serialization, and `isCustomized()` policy checks.
 - **`MainViewModelTest`** (21 tests): Reactive state flow combining, dual search query matching (`appName` and `packageName`), category filtering and dynamic category override, custom tag lifecycle & batch actions, customized filter, sorting, batch actions, PIN configuration, grace period serialization.
 - **`BootReceiverTest`** (4 tests): Service launch on `ACTION_BOOT_COMPLETED`, `ACTION_USER_UNLOCKED`, and `ACTION_MY_PACKAGE_REPLACED`.

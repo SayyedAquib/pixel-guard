@@ -117,8 +117,10 @@ fun LockOverlayScreen(
     var scrambleKey by remember { mutableStateOf(0) }
     var currentLockout by remember { mutableStateOf(lockoutSecondsProvider()) }
     var attemptsUntilLockout by remember { mutableStateOf(attemptsUntilLockoutProvider()) }
-    var isUnlocked by remember { mutableStateOf(false) }
-    var isVerifying by remember { mutableStateOf(false) }
+    var localState by remember { mutableStateOf<LockVerificationState?>(null) }
+    val effectiveVerificationState = localState ?: verificationState
+    val isUnlocked = effectiveVerificationState == LockVerificationState.Success
+    val isVerifying = effectiveVerificationState == LockVerificationState.Verifying
     val isKeypadDisabled = currentLockout > 0 || isVerifying || isUnlocked
     val shakeOffset = remember { Animatable(0f) }
     val dotErrorAnim = remember { Animatable(0f) }
@@ -136,14 +138,10 @@ fun LockOverlayScreen(
     }
 
     LaunchedEffect(verificationState) {
+        localState = null
         when (verificationState) {
-            LockVerificationState.Verifying -> {
-                isVerifying = true
-            }
-            LockVerificationState.Success -> {
-                isUnlocked = true
-                isVerifying = false
-            }
+            LockVerificationState.Verifying -> {}
+            LockVerificationState.Success -> {}
             LockVerificationState.Failed -> {
                 val lockout = lockoutSecondsProvider()
                 if (lockout > 0) {
@@ -165,11 +163,8 @@ fun LockOverlayScreen(
                 }
                 dotErrorAnim.snapTo(0f)
                 dotFadeAnim.snapTo(1f)
-                isVerifying = false
             }
-            LockVerificationState.Idle -> {
-                isVerifying = false
-            }
+            LockVerificationState.Idle -> {}
         }
     }
 
@@ -740,7 +735,7 @@ fun LockOverlayScreen(
                                                         val updated = pinInput + item
                                                         pinInput = updated
                                                         if (updated.length == 6) {
-                                                            isVerifying = true
+                                                            localState = LockVerificationState.Verifying
                                                             onPinSubmitted(updated)
                                                             if (verificationState == LockVerificationState.Idle) {
                                                                 // Legacy/fallback behavior when verificationState is not externally bound (e.g. unit tests)
@@ -767,7 +762,7 @@ fun LockOverlayScreen(
                                                                         }
                                                                         dotErrorAnim.snapTo(0f)
                                                                         dotFadeAnim.snapTo(1f)
-                                                                        isVerifying = false
+                                                                        localState = null
                                                                     }
                                                                 }
                                                             }
